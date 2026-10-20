@@ -54,6 +54,7 @@ export default function ResearchPage() {
         Financial Report Analyst — in development
       </p>
       <p><Link href="/research/evidence">View verified source evidence</Link></p>
+      <p><Link href="/research/ask">Ask a bounded source question</Link></p>
     </main>
   );
 }
