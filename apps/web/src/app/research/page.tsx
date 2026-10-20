@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 
 async function getApiStatus(): Promise<string> {
   const baseUrl =
@@ -52,6 +53,7 @@ export default function ResearchPage() {
       <p>
         Financial Report Analyst — in development
       </p>
+      <p><Link href="/research/evidence">View verified source evidence</Link></p>
     </main>
   );
 }
