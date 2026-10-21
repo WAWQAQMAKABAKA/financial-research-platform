@@ -48,3 +48,26 @@ def ask_source_question(request: SourceQuestion) -> dict:
     except Exception:
         logging.getLogger(__name__).exception("Research Q&A source unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+
+@app.get("/api/v1/research/revenue-scope-preview")
+def local_revenue_scope_preview() -> dict:
+    """Explicitly local-only, opt-in, fail-closed source draft; no publication."""
+    if os.environ.get("FRP_LOCAL_REVENUE_PREVIEW") != "1":
+        raise HTTPException(status_code=404, detail="Revenue preview disabled")
+    pdf_path = os.environ.get("FRP_LOCAL_REVENUE_PDF")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import revenue_scope
+    try:
+        return revenue_scope.build_source_draft(
+            revenue_scope.SOURCE,
+            Path(pdf_path),
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Local revenue source draft unavailable")
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None

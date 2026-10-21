@@ -55,6 +55,7 @@ export default function ResearchPage() {
       </p>
       <p><Link href="/research/evidence">View verified source evidence</Link></p>
       <p><Link href="/research/ask">Ask a bounded source question</Link></p>
+      <p><Link href="/research/revenue-scope">Inspect Hengrui revenue source draft</Link></p>
     </main>
   );
 }
