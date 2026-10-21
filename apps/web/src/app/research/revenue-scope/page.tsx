@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import styles from "./revenue-scope.module.css";
 
 // Source-only local preview. Nothing in this page authorizes financial publication.
 const DOCUMENT_ID = "600276-2026H1-cninfo-1225483600";
@@ -73,6 +74,24 @@ function permittedDraft(d: Draft | null): d is Draft {
   );
 }
 
+const statementInfo = [
+  { number: "01", english: "Consolidated statement", description: "Source row from the consolidated income statement" },
+  { number: "02", english: "Parent-company statement", description: "Source row from the parent-company income statement" },
+] as const;
+
+function UnavailableNotice() {
+  return (
+    <section className={styles.unavailable} role="status" aria-label="Source unavailable">
+      <div className={styles.unavailableSymbol} aria-hidden="true">!</div>
+      <div>
+        <h2>Source draft unavailable</h2>
+        <p>No financial values are shown because source identity or literal review could not be verified.</p>
+        <p className={styles.muted}>Research publication remains blocked.</p>
+      </div>
+    </section>
+  );
+}
+
 async function LocalRevenueDraft() {
   let data: Draft | null = null;
   try {
@@ -84,48 +103,166 @@ async function LocalRevenueDraft() {
   } catch {
     data = null;
   }
-  if (!permittedDraft(data)) {
-    return <p role="status">Source draft: UNAVAILABLE — no unverified numbers displayed.</p>;
-  }
+  if (!permittedDraft(data)) return <UnavailableNotice />;
+
   return (
-    <section style={{ marginTop: 26 }} aria-label="Hengrui source draft">
-      <h2>Reported source rows</h2>
-      <p><strong>Local source-only draft · NOT a reviewed financial conclusion</strong></p>
-      <p>These are two separately labeled source rows, not a revenue comparison or investment conclusion.</p>
-      <div style={{ display: "grid", gap: 18, marginTop: 18 }}>
-        {data.observations.map((o, i) => (
-          <article key={o.evidence_id} style={{ border: "1px solid #888", borderRadius: 10, padding: 18 }}>
-            <h3>{o.statement_title}</h3>
-            <p style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{o.value_verbatim.trim()}</p>
-            <p>Source row: {o.row_label} · Source column: {o.column_header}</p>
-            <p>Original statement context: {o.statement_context}</p>
-            <p>Claim-level literal review: {data.reviews[i].verdict} — {data.reviews[i].rationale}</p>
-            <p>Source location: PDF page {o.page_number}, table {o.table_index}, row {o.row_index}, column {o.column_index}</p>
-            <p><a style={{ textDecoration: "underline" }} href={`${PDF_URL}#page=${o.page_number}`} target="_blank" rel="noopener noreferrer">Open original CNINFO report — PDF page {o.page_number}</a></p>
-          </article>
-        ))}
+    <div className={styles.workspace}>
+      <section className={styles.scopeBanner} aria-label="Interpretation boundary">
+        <span className={styles.scopeIcon} aria-hidden="true">i</span>
+        <div>
+          <strong>Two independent source rows, not a financial comparison</strong>
+          <p>These are verbatim observations from separate statements. No trend, accounting conclusion, or investment inference has been approved.</p>
+        </div>
+      </section>
+
+      <div className={styles.contentGrid}>
+        <section className={styles.observations} aria-labelledby="observation-title">
+          <div className={styles.sectionHeading}>
+            <div>
+              <p className={styles.eyebrow}>EVIDENCE / ORIGINAL DISCLOSURE</p>
+              <h2 id="observation-title">Reported source rows</h2>
+            </div>
+            <span className={styles.itemCount}>02 located cells</span>
+          </div>
+          <div className={styles.evidenceList}>
+            {data.observations.map((o, i) => (
+              <article className={styles.evidenceCard} key={o.evidence_id} aria-labelledby={`statement-${i}`}>
+                <div className={styles.cardTop}>
+                  <div className={styles.numberBlock} aria-hidden="true">{statementInfo[i].number}</div>
+                  <div className={styles.statementHeading}>
+                    <p className={styles.statementType}>{statementInfo[i].english}</p>
+                    <h3 id={`statement-${i}`}>{o.statement_title.trim()}</h3>
+                    <p className={styles.statementSubline}>{statementInfo[i].description}</p>
+                  </div>
+                  <span className={styles.citationTag}>PDF p. {o.page_number}</span>
+                </div>
+
+                <div className={styles.amountBlock}>
+                  <p className={styles.amountLabel}>Reported cell value · source transcription</p>
+                  <div className={styles.amountValue}>{o.value_verbatim.trim()}</div>
+                  <p className={styles.amountContext}>Source-printed context: {o.statement_context}</p>
+                </div>
+
+                <div className={styles.cellFacts}>
+                  <div>
+                    <span>Original row label</span>
+                    <strong>{o.row_label}</strong>
+                  </div>
+                  <div>
+                    <span>Original column header</span>
+                    <strong>{o.column_header}</strong>
+                  </div>
+                  <div>
+                    <span>Table position</span>
+                    <strong>Table {o.table_index} · Row {o.row_index} · Column {o.column_index}</strong>
+                  </div>
+                </div>
+
+                <div className={styles.cardFooter}>
+                  <div className={styles.literalReview}>
+                    <span className={styles.checkMark} aria-hidden="true">✓</span>
+                    <span>Literal cell/location check passed <small>· not a financial-semantic approval</small></span>
+                  </div>
+                  <a className={styles.sourceLink} href={`${data.source_url}#page=${o.page_number}`} target="_blank" rel="noopener noreferrer" aria-label={`Open original PDF, page ${o.page_number}, for ${o.statement_title.trim()}`}>
+                    Open source · Page {o.page_number}
+                    <span aria-hidden="true">↗</span>
+                  </a>
+                </div>
+                <details className={styles.reviewDetail}>
+                  <summary>See review trace</summary>
+                  <p>Internal verdict: {data.reviews[i].verdict}</p>
+                  <p>Scope: {o.review_scope}</p>
+                  <p>Rule: {data.reviews[i].rationale}</p>
+                  <p>Evidence ID: <code>{o.evidence_id}</code></p>
+                </details>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <aside className={styles.sidebar} aria-label="Source provenance and publication status">
+          <section className={styles.boundaryPanel}>
+            <p className={styles.eyebrow}>REVIEW BOUNDARY</p>
+            <h2>Evidence is not a conclusion.</h2>
+            <div className={styles.statusLine}>
+              <span>Research publication</span>
+              <strong>{data.research_publication}</strong>
+            </div>
+            <div className={styles.statusLine}>
+              <span>Financial-semantic review</span>
+              <strong>{data.financial_semantic_review}</strong>
+            </div>
+            <p className={styles.boundaryDetail}>{data.limitation}</p>
+          </section>
+
+          <section className={styles.provenancePanel}>
+            <p className={styles.eyebrow}>TRACEABILITY / SOURCE IDENTITY</p>
+            <h2>Document provenance</h2>
+            <dl className={styles.provenanceList}>
+              <div><dt>Issuer</dt><dd>恒瑞医药 · 600276</dd></div>
+              <div><dt>Reporting period</dt><dd>2026 H1</dd></div>
+              <div><dt>Source document</dt><dd className={styles.breakable}>{data.document_id}</dd></div>
+              <div><dt>Draft generated</dt><dd className={styles.breakable}>{data.generated_at}</dd></div>
+            </dl>
+            <details className={styles.hashDetails}>
+              <summary>View integrity hashes and draft ID</summary>
+              <dl className={styles.provenanceList}>
+                <div><dt>Original PDF · SHA-256</dt><dd className={styles.monospace}>{data.source_sha256}</dd></div>
+                <div><dt>Canonical · SHA-256</dt><dd className={styles.monospace}>{data.canonical_sha256}</dd></div>
+                <div><dt>Draft ID</dt><dd className={styles.monospace}>{data.report_id}</dd></div>
+              </dl>
+            </details>
+            <a className={styles.provenanceLink} href={data.source_url} target="_blank" rel="noopener noreferrer">
+              View original disclosure <span aria-hidden="true">↗</span>
+            </a>
+          </section>
+        </aside>
       </div>
-      <h2 style={{ marginTop: 26 }}>Source identity and review boundary</h2>
-      <p>Document: {data.document_id}</p>
-      <p style={{ overflowWrap: "anywhere" }}>Draft ID: {data.report_id}</p>
-      <p style={{ overflowWrap: "anywhere" }}>Source SHA-256: {data.source_sha256}</p>
-      <p style={{ overflowWrap: "anywhere" }}>Canonical SHA-256: {data.canonical_sha256}</p>
-      <p>Generated: {data.generated_at}</p>
-      <p><strong>Research publication: BLOCKED. Financial-semantic review: NOT PERFORMED.</strong></p>
-      <p>{data.limitation}</p>
-    </section>
+    </div>
   );
 }
 
 export default function RevenueScopePage() {
   return (
-    <main style={{ maxWidth: 900, margin: "45px auto", padding: 24, fontFamily: "Arial, sans-serif" }}>
-      <Link href="/research">Back to research</Link>
-      <h1>恒瑞医药 · 2026 H1 revenue source evidence</h1>
-      <p>Two source-scoped financial cells, with original PDF citations and literal claim review.</p>
-      <Suspense fallback={<p>Verifying original source and document locations...</p>}>
-        <LocalRevenueDraft />
-      </Suspense>
+    <main className={styles.screen}>
+      <div className={styles.container}>
+        <header className={styles.siteHeader}>
+          <Link href="/research" className={styles.brand} aria-label="Back to financial research home">
+            <span className={styles.brandMark} aria-hidden="true">FR</span>
+            <span className={styles.brandText}>FINANCIAL RESEARCH <small>Disclosure intelligence</small></span>
+          </Link>
+          <nav aria-label="Research navigation">
+            <Link href="/research" className={styles.backLink}><span aria-hidden="true">←</span> Research home</Link>
+          </nav>
+        </header>
+
+        <section className={styles.hero} aria-labelledby="page-title">
+          <div className={styles.heroUpper}>
+            <span className={styles.heroKicker}>FINANCIAL DISCLOSURE / SOURCE EVIDENCE</span>
+            <span className={styles.previewLabel}>LOCAL RESEARCH PREVIEW</span>
+          </div>
+          <h1 id="page-title">恒瑞医药 <span>2026 H1 revenue evidence</span></h1>
+          <p>Locate financial figures in the original filing, inspect the exact reported rows, and follow every source citation back to the disclosure.</p>
+          <div className={styles.heroTags}>
+            <span>600276 · SSE</span>
+            <span>2026 interim report</span>
+            <span>Source text only</span>
+          </div>
+        </section>
+
+        <Suspense fallback={
+          <section className={styles.loadingState} role="status" aria-live="polite">
+            <span className={styles.loadingDot} aria-hidden="true" />
+            Verifying original disclosure and source locations…
+          </section>
+        }>
+          <LocalRevenueDraft />
+        </Suspense>
+        <footer className={styles.pageFooter}>
+          <span>Financial Research Platform · Local development preview</span>
+          <span>Source traceability first. Financial interpretation requires independent review.</span>
+        </footer>
+      </div>
     </main>
   );
 }
