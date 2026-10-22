@@ -132,7 +132,7 @@ from pydantic import ConfigDict
 class LocalRevenueQuestion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     report_key: Literal["600276-2026H1", "600760-2026H1"]
-    question_code: Literal["consolidated_revenue_2026H1", "revenue_rows_two_scopes_2026H1"]
+    question_code: Literal["consolidated_revenue_2026H1", "revenue_rows_two_scopes_2026H1", "management_innovation_source_context_2026H1"]
 
 
 _LOCAL_LLM_LIMIT = 4
@@ -158,10 +158,10 @@ def local_source_answer(
     from datetime import datetime
     from pathlib import Path
     from zoneinfo import ZoneInfo
-    from app.modules.financial_report_analyst import source_workspace, workspace_llm, revenue_scope, multi_evidence
+    from app.modules.financial_report_analyst import source_workspace, workspace_llm, revenue_scope, multi_evidence, management_evidence, management_brief
 
     # Only Hengrui has an independently source-reviewed two-scope selection.
-    if (request.question_code == multi_evidence.QUESTION_CODE
+    if (request.question_code in (multi_evidence.QUESTION_CODE, management_brief.QUESTION_CODE)
         and request.report_key != "600276-2026H1"):
         raise HTTPException(status_code=422, detail="UNSUPPORTED_REPORT_QUESTION_PAIR")
 
@@ -177,15 +177,21 @@ def local_source_answer(
     try:
         if _LOCAL_LLM_COUNT >= _LOCAL_LLM_LIMIT:
             raise HTTPException(status_code=429, detail="LOCAL_MODEL_CALL_LIMIT_REACHED")
+        management_passage = None
         if not _PDF_REQUEST_LOCK.acquire(timeout=90):
             raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
         try:
             try:
                 as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
-                if request.question_code == multi_evidence.QUESTION_CODE:
+                if request.question_code in (multi_evidence.QUESTION_CODE, management_brief.QUESTION_CODE):
                     source_draft = revenue_scope.build_source_draft(
                         revenue_scope.SOURCE, Path(pdf_path), as_of=as_of,
                     )
+                    if (request.question_code == management_brief.QUESTION_CODE
+                        and source_draft.get("status") == "SOURCE_DRAFT_READY"):
+                        management_passage = management_evidence.locate_management_excerpt(
+                            Path(pdf_path), as_of=as_of,
+                        )
                 else:
                     source_draft = source_workspace.build_source_workspace(
                         request.report_key, Path(pdf_path), as_of=as_of,
@@ -200,6 +206,10 @@ def local_source_answer(
                     "claims": [], "research_publication": "BLOCKED",
                     "financial_semantic_review": "NOT_PERFORMED"}
         _LOCAL_LLM_COUNT += 1  # Debit even if DeepSeek fails; never retry.
+        if request.question_code == management_brief.QUESTION_CODE:
+            return management_brief.draft_management_brief(
+                source_draft, management_passage, api_key=api_key,
+            )
         if request.question_code == multi_evidence.QUESTION_CODE:
             return multi_evidence.draft_two_source_brief(
                 source_draft, api_key=api_key,

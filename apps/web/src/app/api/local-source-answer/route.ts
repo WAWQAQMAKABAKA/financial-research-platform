@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const KEYS = new Set(["600276-2026H1", "600760-2026H1"]);
-const QUESTIONS = new Set(["consolidated_revenue_2026H1", "revenue_rows_two_scopes_2026H1"]);
+const QUESTIONS = new Set(["consolidated_revenue_2026H1", "revenue_rows_two_scopes_2026H1", "management_innovation_source_context_2026H1"]);
 
 export async function POST(request: NextRequest) {
   // This is NOT a production customer API. Fail closed outside dev mode.
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (Object.keys(data).sort().join(",") !== "question_code,report_key" ||
       typeof data.report_key !== "string" || !KEYS.has(data.report_key) ||
       typeof data.question_code !== "string" || !QUESTIONS.has(data.question_code) ||
-      (data.question_code === "revenue_rows_two_scopes_2026H1" && data.report_key !== "600276-2026H1")) {
+      (["revenue_rows_two_scopes_2026H1", "management_innovation_source_context_2026H1"].includes(data.question_code) && data.report_key !== "600276-2026H1")) {
     return NextResponse.json({ detail: "Unsupported question" }, { status: 400 });
   }
   try {

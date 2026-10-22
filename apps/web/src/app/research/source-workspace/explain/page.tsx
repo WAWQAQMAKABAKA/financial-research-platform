@@ -136,6 +136,6 @@ export default function TwoSourceBrief() {
       <p className={styles.muted}>Model: {answer.model} · Tokens: {answer.usage.total_tokens} · Estimated cost: US${answer.usage.estimated_cost_usd_low}–${answer.usage.estimated_cost_usd_high}</p>
       <p className={styles.warn}>Literal evidence matches only. No independent accounting qualification. Research publication BLOCKED.</p>
     </section>}
-    <p className={styles.note}>Local developer experiment · API key remains on the backend</p>
+    <p className={styles.note}><Link href="/research/source-workspace/analyse">Explore management source context →</Link> · Local developer experiment · API key remains on the backend</p>
   </div></main>;
 }
