@@ -85,6 +85,7 @@ export default function AskLocalSource() {
     <section className={styles.hero}><p className={styles.kicker}>M1.7B / LOCAL DEEPSEEK EXPERIMENT</p>
       <h1>Ask the source.</h1><p>One supported question. One original disclosure. One paid model proposal, independently checked against the exact PDF cell before it appears.</p>
     </section>
+    <p className={styles.note}><Link href="/research/source-workspace/explain">Explore a two-source briefing for 恒瑞医药 →</Link></p>
     <div className={styles.grid}>
       <section className={styles.panel} aria-label="Research question">
         <p className={styles.section}>SOURCE-BOUND QUESTION</p>

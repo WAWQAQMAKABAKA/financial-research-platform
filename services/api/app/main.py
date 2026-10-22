@@ -132,7 +132,7 @@ from pydantic import ConfigDict
 class LocalRevenueQuestion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     report_key: Literal["600276-2026H1", "600760-2026H1"]
-    question_code: Literal["consolidated_revenue_2026H1"]
+    question_code: Literal["consolidated_revenue_2026H1", "revenue_rows_two_scopes_2026H1"]
 
 
 _LOCAL_LLM_LIMIT = 4
@@ -158,7 +158,12 @@ def local_source_answer(
     from datetime import datetime
     from pathlib import Path
     from zoneinfo import ZoneInfo
-    from app.modules.financial_report_analyst import source_workspace, workspace_llm
+    from app.modules.financial_report_analyst import source_workspace, workspace_llm, revenue_scope, multi_evidence
+
+    # Only Hengrui has an independently source-reviewed two-scope selection.
+    if (request.question_code == multi_evidence.QUESTION_CODE
+        and request.report_key != "600276-2026H1"):
+        raise HTTPException(status_code=422, detail="UNSUPPORTED_REPORT_QUESTION_PAIR")
 
     entry = source_workspace.REPORTS.get(request.report_key)
     if entry is None:
@@ -176,10 +181,15 @@ def local_source_answer(
             raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
         try:
             try:
-                source_draft = source_workspace.build_source_workspace(
-                    request.report_key, Path(pdf_path),
-                    as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
-                )
+                as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
+                if request.question_code == multi_evidence.QUESTION_CODE:
+                    source_draft = revenue_scope.build_source_draft(
+                        revenue_scope.SOURCE, Path(pdf_path), as_of=as_of,
+                    )
+                else:
+                    source_draft = source_workspace.build_source_workspace(
+                        request.report_key, Path(pdf_path), as_of=as_of,
+                    )
             except Exception:
                 # Never log document text, provider responses, or credentials.
                 raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
@@ -190,6 +200,10 @@ def local_source_answer(
                     "claims": [], "research_publication": "BLOCKED",
                     "financial_semantic_review": "NOT_PERFORMED"}
         _LOCAL_LLM_COUNT += 1  # Debit even if DeepSeek fails; never retry.
+        if request.question_code == multi_evidence.QUESTION_CODE:
+            return multi_evidence.draft_two_source_brief(
+                source_draft, api_key=api_key,
+            )
         return workspace_llm.draft_one_source_answer(
             request.report_key, source_draft, api_key=api_key,
         )
