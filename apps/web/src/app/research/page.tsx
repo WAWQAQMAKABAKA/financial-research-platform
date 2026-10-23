@@ -57,6 +57,7 @@ export default function ResearchPage() {
       <p><Link href="/research/ask">Ask a bounded source question</Link></p>
       <p><Link href="/research/revenue-scope">Inspect Hengrui revenue source draft</Link></p>
       <p><Link href="/research/source-workspace">Explore two source-verified reports</Link></p>
+      <p><Link href="/research/reports/600276-2026H1">Read Hengrui 2026 H1 source-bound report preview</Link></p>
       <p><Link href="/research/source-workspace/review">Review a financial claim (local development)</Link></p>
       <p><Link href="/research/source-workspace/ask">Ask DeepSeek a source-bound question (local development)</Link></p>
     </main>
