@@ -275,3 +275,52 @@ def local_claim_review(
             status_code=503,
             detail="SOURCE_UNAVAILABLE",
         ) from None
+
+
+# M1.10B: manual Analyst candidate, independently reviewed; no model call.
+class LocalAnalystDraftReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_key: Literal["600276-2026H1"]
+    candidate_text: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/v1/research/local-analyst-draft-review")
+@_serialize_pdf_route
+def local_analyst_draft_review(
+    request: LocalAnalystDraftReviewRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    if os.environ.get("FRP_LOCAL_ANALYST_REVIEW_UI") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (
+        len(token) < 32
+        or not x_frp_local_token
+        or not compare_digest(token, x_frp_local_token)
+    ):
+        raise HTTPException(status_code=404, detail="Not available")
+
+    pdf_path = os.environ.get("FRP_LOCAL_REVENUE_PDF")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst.analyst_claim_review import (
+        review_analyst_draft,
+    )
+
+    try:
+        return review_analyst_draft(
+            Path(pdf_path),
+            request.candidate_text,
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        # Fail closed. No raw exceptions, PDF contents or secrets.
+        raise HTTPException(
+            status_code=503, detail="SOURCE_UNAVAILABLE"
+        ) from None
