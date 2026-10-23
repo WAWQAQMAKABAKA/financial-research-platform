@@ -69,6 +69,41 @@ type ReportPacket = {
   limitations: string[];
 };
 
+
+type ReviewPacket = {
+  status: string;
+  report_key: string;
+  review_id: string;
+  as_of: string;
+  draft_origin: string;
+  document_id: string;
+  source_url: string;
+  source_sha256: string;
+  canonical_sha256: string;
+  financial_semantic_review: string;
+  research_publication: string;
+  limitation: string;
+  claim: {
+    claim_id: string;
+    kind: string;
+    text: string;
+    evidence_ids: string[];
+  };
+  review: {
+    claim_id: string;
+    verdict: "REJECT" | "UNCERTAIN";
+    reason: string;
+    compared_evidence_ids: string[];
+    review_scope: string;
+  };
+  evidence: {
+    evidence_id: string;
+    source_page: number;
+    excerpt: string;
+    review_scope: string;
+  };
+};
+
 const EXPECTED_ROWS = [
   { title: "合并利润表", row: "其中：营业收入" },
   { title: "母公司利润表", row: "一、营业收入" },
@@ -194,6 +229,78 @@ function verifiedReport(v: unknown): v is ReportPacket {
   );
 }
 
+
+function verifiedClaimReview(
+  value: unknown,
+  submittedText: string,
+  source: ReportPacket,
+): value is ReviewPacket {
+  if (!record(value)) return false;
+
+  const v = value;
+  const c = v.claim;
+  const r = v.review;
+  const e = v.evidence;
+
+  if (!record(c) || !record(r) || !record(e)) {
+    return false;
+  }
+  const management = source.management_statement;
+
+  return (
+    v.status === "UNPUBLISHED_ANALYST_CANDIDATE_REVIEWED" &&
+    v.report_key === source.report_key &&
+    v.draft_origin === "MANUAL_ANALYST_DRAFT" &&
+    v.document_id === source.document_id &&
+    v.source_url === source.source_url &&
+    v.source_sha256 === source.source_sha256 &&
+    v.canonical_sha256 === source.canonical_sha256 &&
+    v.financial_semantic_review === "NOT_QUALIFIED" &&
+    v.research_publication === "BLOCKED" &&
+    typeof v.review_id === "string" &&
+    HASH.test(v.review_id) &&
+    typeof v.as_of === "string" &&
+    Number.isFinite(Date.parse(v.as_of)) &&
+    typeof v.limitation === "string" &&
+    !!v.limitation.trim() &&
+    c.claim_id === "MC1" &&
+    c.kind === "OBSERVED_FACT" &&
+    c.text === submittedText &&
+    Array.isArray(c.evidence_ids) &&
+    c.evidence_ids.length === 1 &&
+    c.evidence_ids[0] === management.evidence_id &&
+    r.claim_id === c.claim_id &&
+    (r.verdict === "REJECT" ||
+      r.verdict === "UNCERTAIN") &&
+    typeof r.reason === "string" &&
+    /^[A-Z][A-Z0-9_]{2,100}$/.test(r.reason) &&
+    r.review_scope ===
+      "BOUNDED_NARRATIVE_CONTRADICTION_ONLY" &&
+    Array.isArray(r.compared_evidence_ids) &&
+    r.compared_evidence_ids.length === 1 &&
+    r.compared_evidence_ids[0] === management.evidence_id &&
+    e.evidence_id === management.evidence_id &&
+    e.source_page === management.page &&
+    e.excerpt === management.text &&
+    e.review_scope === management.review_scope
+  );
+}
+
+function exampleClaim(
+  source: ReportPacket,
+  denominator: "total company revenue" | "drug sales revenue",
+): string {
+  const share = source.management_statement.text.match(
+    /比重达([0-9]+(?:\.[0-9]+)?)%/,
+  );
+  if (!share) return "";
+
+  return (
+    `Innovative-drug sales were ${share[1]}% of ` +
+    `${denominator}.`
+  );
+}
+
 function OriginalLink({ page }: { page: number }) {
   return (
     <a
@@ -211,10 +318,18 @@ export default function HengruiSourceReport() {
   const [report, setReport] = useState<ReportPacket | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [candidate, setCandidate] = useState("");
+  const [reviewPacket, setReviewPacket] =
+    useState<ReviewPacket | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   async function loadReport() {
-    if (loading) return;
+    if (loading || reviewBusy) return;
 
+    setReviewPacket(null);
+    setReviewError("");
+    setCandidate("");
     setLoading(true);
     setReport(null);
     setError("");
@@ -243,6 +358,67 @@ export default function HengruiSourceReport() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+
+  async function reviewCandidate() {
+    if (
+      !report ||
+      loading ||
+      reviewBusy ||
+      !candidate.trim() ||
+      candidate.length > 400 ||
+      new TextEncoder().encode(candidate).length > 1200
+    ) {
+      return;
+    }
+
+    const submittedText = candidate;
+    const sourceReport = report;
+
+    setReviewBusy(true);
+    setReviewPacket(null);
+    setReviewError("");
+
+    try {
+      const response = await fetch(
+        "/api/local-analyst-draft-review",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            report_key: REPORT_KEY,
+            candidate_text: submittedText,
+          }),
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("REVIEW_UNAVAILABLE");
+      }
+
+      const packet: unknown = await response.json();
+
+      if (
+        !verifiedClaimReview(
+          packet,
+          submittedText,
+          sourceReport,
+        )
+      ) {
+        throw new Error("REVIEW_EVIDENCE_MISMATCH");
+      }
+
+      setReviewPacket(packet);
+    } catch {
+      setReviewError(
+        "The review is unavailable or its evidence does not " +
+        "match this report. No verdict was released.",
+      );
+    } finally {
+      setReviewBusy(false);
     }
   }
 
@@ -291,7 +467,7 @@ export default function HengruiSourceReport() {
             type="button"
             className={styles.button}
             onClick={loadReport}
-            disabled={loading}
+            disabled={loading || reviewBusy}
           >
             {loading
               ? "Verifying original disclosure…"
@@ -393,6 +569,162 @@ export default function HengruiSourceReport() {
                   Publication: BLOCKED.
                 </p>
               </div>
+            </section>
+
+
+            <section
+              className={styles.challenge}
+              aria-label="Challenge a proposed claim"
+            >
+              <p className={styles.kicker}>
+                M114 / CHALLENGE A CLAIM
+              </p>
+              <h2>Does this interpretation match the source?</h2>
+              <p className={styles.challengeIntro}>
+                Test a proposed statement against the verified
+                management passage (M1, PDF page 20).
+                This bounded Reviewer can reject recognized
+                substitutions or return UNCERTAIN.
+                It does not review the accounting meaning of
+                the two statement cells.
+              </p>
+
+              <div className={styles.challengeOptions}>
+                <button
+                  type="button"
+                  disabled={reviewBusy}
+                  onClick={() => {
+                    setCandidate(
+                      exampleClaim(report, "total company revenue"),
+                    );
+                    setReviewPacket(null);
+                    setReviewError("");
+                  }}
+                >
+                  Try an incorrect denominator
+                </button>
+                <button
+                  type="button"
+                  disabled={reviewBusy}
+                  onClick={() => {
+                    setCandidate(
+                      exampleClaim(report, "drug sales revenue"),
+                    );
+                    setReviewPacket(null);
+                    setReviewError("");
+                  }}
+                >
+                  Try the disclosed denominator
+                </button>
+              </div>
+
+              <label
+                htmlFor="m114-candidate"
+                className={styles.challengeLabel}
+              >
+                Proposed claim
+              </label>
+              <textarea
+                id="m114-candidate"
+                className={styles.challengeInput}
+                rows={3}
+                maxLength={400}
+                disabled={reviewBusy}
+                value={candidate}
+                onChange={(event) => {
+                  setCandidate(event.target.value);
+                  setReviewPacket(null);
+                  setReviewError("");
+                }}
+                placeholder="Write a statement about the management disclosure..."
+              />
+              <div className={styles.challengeActions}>
+                <span>
+                  {candidate.length}/400 characters ·
+                  Local source-bound review only
+                </span>
+                <button
+                  type="button"
+                  className={styles.button}
+                  disabled={
+                    reviewBusy ||
+                    !candidate.trim() ||
+                    candidate.length > 400 ||
+                    new TextEncoder().encode(candidate).length > 1200
+                  }
+                  onClick={reviewCandidate}
+                >
+                  {reviewBusy
+                    ? "Checking claim…"
+                    : "Review proposed claim"}
+                </button>
+              </div>
+
+              {reviewError && (
+                <div
+                  role="alert"
+                  className={styles.challengeError}
+                >
+                  <strong>Review withheld</strong>
+                  <p>{reviewError}</p>
+                  <p>Publication remains BLOCKED.</p>
+                </div>
+              )}
+
+              {reviewPacket && (
+                <article
+                  className={styles.challengeResult}
+                  aria-live="polite"
+                >
+                  <p className={styles.kicker}>
+                    SOURCE-BOUND REVIEW / UNPUBLISHED
+                  </p>
+                  <h3>
+                    Verdict: {reviewPacket.review.verdict}
+                  </h3>
+                  <p>
+                    <strong>Proposed claim:</strong>{" "}
+                    {reviewPacket.claim.text}
+                  </p>
+                  <p>
+                    <strong>Reviewer reason:</strong>{" "}
+                    {reviewPacket.review.reason.replaceAll("_", " ")}
+                  </p>
+
+                  <div className={styles.challengeEvidence}>
+                    <strong>Compared original passage</strong>
+                    <blockquote>
+                      {reviewPacket.evidence.excerpt}
+                    </blockquote>
+                    <OriginalLink
+                      page={reviewPacket.evidence.source_page}
+                    />
+                  </div>
+
+                  <p className={styles.challengeCaution}>
+                    REJECT identifies a recognized contradiction
+                    with this source passage. UNCERTAIN does
+                    not mean approval. Financial semantics:
+                    NOT QUALIFIED. Publication: BLOCKED.
+                  </p>
+
+                  <details className={styles.details}>
+                    <summary>Claim, review and evidence identity</summary>
+                    <p>Claim: {reviewPacket.claim.claim_id}</p>
+                    <p className={styles.hash}>
+                      Evidence ID: {reviewPacket.evidence.evidence_id}
+                    </p>
+                    <p className={styles.hash}>
+                      Review ID: {reviewPacket.review_id}
+                    </p>
+                    <p className={styles.hash}>
+                      Source report: {report.report_identity}
+                    </p>
+                    <p>Review scope: {reviewPacket.review.review_scope}</p>
+                    <p>As-of: {reviewPacket.as_of}</p>
+                  </details>
+                </article>
+              )}
             </section>
 
             <div className={styles.summary}>

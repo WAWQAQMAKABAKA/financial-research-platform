@@ -143,3 +143,132 @@
   .answerFirst{padding:19px}
   .answerGrid{grid-template-columns:1fr}
 }
+
+/* M114: source-bound claim challenge, not publication approval. */
+.challenge{
+  background:#fff;
+  border:1px solid #d5e3e7;
+  border-radius:14px;
+  padding:29px;
+  margin:24px 0;
+}
+.challenge h2{
+  font-size:24px;
+  margin:0 0 12px;
+}
+.challengeIntro{
+  max-width:830px;
+  font-size:13px;
+  color:#5d7680;
+  line-height:1.85;
+}
+.challengeOptions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:21px 0;
+}
+.challengeOptions button{
+  background:#edf5f5;
+  border:1px solid #bdd5d8;
+  color:#255663;
+  padding:11px 14px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.challengeOptions button:disabled{
+  opacity:.5;
+  cursor:wait;
+}
+.challengeLabel{
+  display:block;
+  font-size:13px;
+  font-weight:750;
+  margin-bottom:9px;
+}
+.challengeInput{
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid #aac5cb;
+  border-radius:9px;
+  padding:14px;
+  background:#fcfefe;
+  color:#1b3441;
+  font:inherit;
+  font-size:14px;
+  line-height:1.7;
+  resize:vertical;
+}
+.challengeInput:focus-visible,
+.challengeOptions button:focus-visible{
+  outline:3px solid #83bfc5;
+  outline-offset:2px;
+}
+.challengeActions{
+  display:flex;
+  gap:15px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+.challengeActions span{
+  color:#6b818a;
+  font-size:11px;
+}
+.challengeResult{
+  margin-top:22px;
+  border:1px solid #d6e3e4;
+  background:#f7fbfb;
+  border-radius:10px;
+  padding:21px;
+}
+.challengeResult h3{
+  margin:0 0 15px;
+  font-size:22px;
+}
+.challengeResult p{
+  font-size:13px;
+  line-height:1.8;
+  overflow-wrap:anywhere;
+}
+.challengeEvidence{
+  margin:18px 0;
+  padding:17px;
+  background:#fff;
+  border:1px solid #e0e9eb;
+  border-radius:8px;
+}
+.challengeEvidence strong{
+  font-size:12px;
+}
+.challengeEvidence blockquote{
+  font-size:14px;
+  line-height:1.9;
+  border-left:3px solid #8eb8b8;
+  padding-left:13px;
+  margin:12px 0;
+}
+.challengeCaution{
+  color:#865442;
+  font-weight:650;
+}
+.challengeError{
+  margin-top:19px;
+  padding:16px;
+  border:1px solid #dfbdb5;
+  background:#fcf7f5;
+  border-radius:9px;
+}
+.challengeError p{
+  font-size:12px;
+  line-height:1.8;
+}
+@media(max-width:750px){
+  .challenge{padding:19px}
+  .challengeActions{align-items:stretch}
+  .challengeActions .button{width:100%}
+}
