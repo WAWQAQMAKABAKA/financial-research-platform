@@ -319,6 +319,82 @@ export default function HengruiSourceReport() {
 
         {report && (
           <div aria-live="polite">
+            <section
+              className={styles.answerFirst}
+              aria-label="Source-bound research answer"
+            >
+              <p className={styles.kicker}>
+                SOURCE-BOUND ANSWER / READ FIRST
+              </p>
+              <h2>What the located evidence shows</h2>
+              <p className={styles.answerIntro}>
+                Two separately identified financial-statement rows
+                and one attributed management passage were located
+                in the original Hengrui disclosure. The values below
+                retain their original source context.
+              </p>
+
+              <div className={styles.answerGrid}>
+                {report.observations.map((o) => (
+                  <article
+                    className={styles.answerItem}
+                    key={o.claim_id}
+                  >
+                    <span className={styles.smallTag}>
+                      {o.claim_id} · SOURCE CELL
+                    </span>
+                    <h3>{o.statement_title}</h3>
+                    <p className={styles.answerRow}>
+                      {o.row_label}
+                    </p>
+                    <p className={styles.answerValue}>
+                      {o.value_verbatim}
+                    </p>
+                    <p className={styles.answerContext}>
+                      Original source context: {o.statement_context}
+                    </p>
+                    <OriginalLink page={o.page} />
+                  </article>
+                ))}
+              </div>
+
+              <article className={styles.answerManagement}>
+                <span className={styles.smallTag}>
+                  M1 · ATTRIBUTED MANAGEMENT DISCLOSURE
+                </span>
+                <h3>Innovative-drug sales discussion</h3>
+                <blockquote className={styles.answerPassage}>
+                  {report.management_statement.text}
+                </blockquote>
+                <p className={styles.answerContext}>
+                  This is management&apos;s disclosed wording, not an
+                  independently approved financial interpretation.
+                </p>
+                <OriginalLink
+                  page={report.management_statement.page}
+                />
+              </article>
+
+              <div className={styles.answerBoundary}>
+                <strong>
+                  What these three evidence items do not establish
+                </strong>
+                <p>
+                  This assembled evidence packet does not establish
+                  accounting comparability between the two statement
+                  rows, a reconciliation with the management sales
+                  figure, a causal explanation, or company-wide
+                  performance growth. It does not imply that the
+                  complete disclosure lacks other relevant evidence.
+                </p>
+                <p>
+                  Analyst interpretation: WITHHELD.
+                  Financial-semantic review: NOT PERFORMED.
+                  Publication: BLOCKED.
+                </p>
+              </div>
+            </section>
+
             <div className={styles.summary}>
               <div>
                 <span>Financial statement observations</span>
