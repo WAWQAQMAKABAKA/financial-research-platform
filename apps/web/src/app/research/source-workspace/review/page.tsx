@@ -214,6 +214,13 @@ export default function LocalClaimReviewPage() {
           </p>
         </section>
 
+        <p className={styles.note}>
+          Want to review your own statement?{" "}
+          <Link href="/research/source-workspace/review/manual">
+            Open manual Analyst draft review →
+          </Link>
+        </p>
+
         <div className={styles.grid}>
           <section
             className={styles.panel}
