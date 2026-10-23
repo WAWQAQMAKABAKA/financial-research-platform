@@ -219,3 +219,59 @@ def local_source_answer(
         )
     finally:
         _LOCAL_LLM_LOCK.release()
+
+
+# M1.9C: local-only claim review; no paid provider or publication.
+class LocalClaimReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_key: Literal["600276-2026H1"]
+    claim_code: Literal[
+        "share_drug_sales",
+        "share_company_revenue",
+        "growth_innovative_drugs",
+        "growth_company_revenue",
+    ]
+
+
+@app.post("/api/v1/research/local-claim-review")
+@_serialize_pdf_route
+def local_claim_review(
+    request: LocalClaimReviewRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    if os.environ.get("FRP_LOCAL_CLAIM_REVIEW_UI") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (
+        len(token) < 32
+        or not x_frp_local_token
+        or not compare_digest(token, x_frp_local_token)
+    ):
+        raise HTTPException(status_code=404, detail="Not available")
+
+    pdf_path = os.environ.get("FRP_LOCAL_REVENUE_PDF")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+
+    from app.modules.financial_report_analyst.claim_review_preview import (
+        build_preview,
+    )
+
+    try:
+        return build_preview(
+            Path(pdf_path),
+            request.claim_code,
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        # Never expose PDF text, paths, secrets, or exception contents.
+        raise HTTPException(
+            status_code=503,
+            detail="SOURCE_UNAVAILABLE",
+        ) from None
