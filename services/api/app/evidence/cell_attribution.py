@@ -18,7 +18,12 @@ import unicodedata
 import pymupdf
 
 from app.evidence.contracts import SourceDocument
-from app.evidence.document_index import SECTION_TITLES, index_document
+from app.evidence.document_index import (
+    SECTION_TITLES,
+    index_document,
+    index_document_scoped,
+    scoped_table_pages,
+)
 
 _DASHES = frozenset(("—", "–", "-", "―", "－"))
 
@@ -83,6 +88,51 @@ def _check_index(index: dict, source: SourceDocument, as_of: datetime) -> None:
     if len(index.get("pages", [])) != index.get("page_count"):
         raise ValueError("INDEX_PAGE_COUNT_MISMATCH")
 
+    coverage = index.get("table_extraction_coverage")
+    if coverage is not None:
+        if (
+            not isinstance(coverage, dict)
+            or coverage.get("mode") != "SECTION_WINDOW"
+            or not isinstance(
+                coverage.get("requested_section_kinds"), list
+            )
+            or not isinstance(
+                coverage.get("scanned_pages"), list
+            )
+            or coverage.get("heading_pages_scanned")
+                != index["page_count"]
+        ):
+            raise ValueError("SCOPED_INDEX_COVERAGE_INVALID")
+
+        kinds = coverage["requested_section_kinds"]
+
+        if (
+            not kinds
+            or kinds != sorted(set(kinds))
+            or not all(isinstance(k, str) for k in kinds)
+        ):
+            raise ValueError("SCOPED_INDEX_KINDS_INVALID")
+
+        expected_pages = sorted(
+            i + 1 for i in scoped_table_pages(
+                [p["headings"] for p in index["pages"]],
+                frozenset(kinds),
+            )
+        )
+
+        if coverage["scanned_pages"] != expected_pages:
+            raise ValueError("SCOPED_INDEX_PAGES_MISMATCH")
+
+        selected = set(expected_pages)
+
+        if any(
+            page["tables"]
+            for page in index["pages"]
+            if page["page_number"] not in selected
+        ):
+            raise ValueError("SCOPED_INDEX_TABLE_OUTSIDE_WINDOW")
+
+
 
 def locate_cell_candidate(
     index: dict,
@@ -103,6 +153,14 @@ def locate_cell_candidate(
     _check_index(index, source, as_of)
     if section_kind not in SECTION_TITLES:
         return _blocked("UNRESOLVED", "UNRECOGNIZED_STATEMENT_TYPE")
+    coverage = index.get("table_extraction_coverage")
+    if (
+        coverage is not None
+        and section_kind not in coverage["requested_section_kinds"]
+    ):
+        return _blocked(
+            "UNRESOLVED", "SECTION_OUTSIDE_SCOPED_INDEX",
+        )
     if not row_label.strip() or not column_header.strip():
         return _blocked("UNRESOLVED", "EMPTY_SELECTION")
 
@@ -198,13 +256,25 @@ def locate_cells_in_verified_pdf(
     *,
     as_of: datetime,
     selections: list[dict],
+    bounded_tables: bool = False,
 ) -> list[dict]:
-    """Rebuild one complete source-verified index, then resolve many cells.
+    """Build source-verified cell candidates.
 
-    This is an offline development entrypoint. No acceptance reference answers,
-    network calls, or GUI code are available to the runtime module.
+    The default remains full-document table indexing.
+    The opt-in path scans every heading but only bounded table pages.
+    Neither path qualifies financial accounting meaning.
     """
-    index = index_document(source, pdf_path, as_of=as_of)
+    if bounded_tables:
+        section_kinds = frozenset(
+            item["section_kind"] for item in selections
+        )
+        index = index_document_scoped(
+            source, pdf_path,
+            as_of=as_of,
+            section_kinds=section_kinds,
+        )
+    else:
+        index = index_document(source, pdf_path, as_of=as_of)
     results = [locate_cell_candidate(index, source, as_of=as_of, **selection)
                for selection in selections]
     # Capture original statement's printed period/unit/currency context from

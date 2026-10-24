@@ -110,7 +110,12 @@ def build_source_draft(source: SourceDocument, pdf_path: Path, *, as_of: datetim
     """Bounded Analyst -> independent literal Reviewer -> fail-closed draft gate."""
     source.require_available(as_of)
     selections = list(SELECTIONS)
-    results = locate_cells_in_verified_pdf(source, pdf_path, as_of=as_of, selections=selections)
+    results = locate_cells_in_verified_pdf(
+        source, pdf_path,
+        as_of=as_of,
+        selections=selections,
+        bounded_tables=True,
+    )
     if len(results) != len(selections) or any(x.get("status") != "ONE_CELL_CANDIDATE" for x in results):
         return _withheld("SOURCE_CELL_UNRESOLVED")
     candidates = [r["candidates"][0] for r in results]

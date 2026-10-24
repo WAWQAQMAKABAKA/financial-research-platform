@@ -196,6 +196,154 @@ def assign_sections(pages: list[dict]) -> None:
             previous = None
 
 
+
+def scoped_table_pages(
+    page_headings: list[list[dict]],
+    section_kinds: frozenset[str],
+) -> set[int]:
+    """Return zero-based table-scan pages from whole-document headings.
+
+    No source page numbers or financial values are supplied.
+    Both section roots and subsequent boundaries must be unambiguous.
+    A same-page boundary is included to retain split-page tables.
+    """
+    if (
+        not section_kinds
+        or not section_kinds.issubset(SECTION_TITLES)
+    ):
+        raise ValueError("SCOPED_SECTION_KINDS_INVALID")
+
+    headings = sorted(
+        (page_no, heading["bbox_pt"][1], heading["kind"])
+        for page_no, items in enumerate(page_headings)
+        for heading in items
+    )
+
+    selected: set[int] = set()
+
+    for kind in section_kinds:
+        positions = [
+            i for i, item in enumerate(headings)
+            if item[2] == kind
+        ]
+
+        if len(positions) != 1:
+            raise ValueError("SCOPED_SECTION_HEADING_AMBIGUOUS")
+
+        position = positions[0]
+        if position + 1 >= len(headings):
+            raise ValueError("SCOPED_SECTION_BOUNDARY_MISSING")
+
+        first_page = headings[position][0]
+        boundary_page = headings[position + 1][0]
+
+        # Conservative upper bound. Never truncate the window.
+        # Ambiguous or unusually long sections fail closed.
+        if (
+            boundary_page < first_page
+            or boundary_page - first_page + 1 > 16
+        ):
+            raise ValueError("SCOPED_SECTION_WINDOW_UNBOUNDED")
+
+        selected.update(
+            range(first_page, boundary_page + 1)
+        )
+
+    return selected
+
+
+def index_document_scoped(
+    source: SourceDocument,
+    pdf_path: Path,
+    *,
+    as_of: datetime,
+    section_kinds: frozenset[str],
+) -> dict:
+    """Build a source-verified index with bounded table coverage.
+
+    Full original-PDF canonical verification and whole-document
+    heading discovery remain mandatory. Only table extraction is
+    restricted. Not a complete all-table index or accounting review.
+    """
+    source.require_available(as_of)
+
+    canonical = canonicalize_pdf(
+        document_id=source.document_id,
+        pdf_path=pdf_path,
+        expected_source_sha256=source.source_sha256,
+    )
+
+    if canonical.canonical_sha256 != source.canonical_sha256:
+        raise ValueError("CANONICAL_SHA_MISMATCH")
+
+    with pymupdf.open(pdf_path) as doc:
+        all_headings = [
+            headings_on_page(doc[i])
+            for i in range(len(doc))
+        ]
+
+        selected = scoped_table_pages(
+            all_headings, section_kinds,
+        )
+
+        pages = []
+
+        for index in range(len(doc)):
+            page = doc[index]
+            pages.append({
+                "page_number": index + 1,
+                "width_pt": round(page.rect.width, 2),
+                "height_pt": round(page.rect.height, 2),
+                "headings": all_headings[index],
+                "tables": (
+                    _tables_on_page(page)
+                    if index in selected
+                    else []
+                ),
+            })
+
+    assign_sections(pages)
+
+    assigned = [
+        {
+            "page_number": page["page_number"],
+            "table_index": table["table_index"],
+            "section_kind": table["section_kind"],
+            "relationship": table["relationship"],
+            "bbox_pt": table["bbox_pt"],
+            "shape": [
+                table["row_count"],
+                table["column_count"],
+            ],
+        }
+        for page in pages
+        for table in page["tables"]
+        if table["section_kind"]
+    ]
+
+    return {
+        "index_schema": "frp-cn-document-index-candidate-v1",
+        "parser_id": PARSER_ID,
+        "parser_version": PARSER_VERSION,
+        "document_id": source.document_id,
+        "source_url": source.source_url,
+        "source_sha256": source.source_sha256,
+        "canonical_sha256": source.canonical_sha256,
+        "checked_as_of": as_of.isoformat(),
+        "page_count": len(pages),
+        "sections": assigned,
+        "pages": pages,
+        "table_extraction_coverage": {
+            "mode": "SECTION_WINDOW",
+            "requested_section_kinds": sorted(section_kinds),
+            "scanned_pages": sorted(i + 1 for i in selected),
+            "heading_pages_scanned": len(pages),
+        },
+        "qualification_status": "REVIEW_REQUIRED",
+        "financial_semantic_review": "NOT_PERFORMED",
+        "research_publication": "BLOCKED",
+    }
+
 def index_document(source: SourceDocument, pdf_path: Path, *, as_of: datetime) -> dict:
     """Verify source identity and conservatively index *all* PDF pages.
 
