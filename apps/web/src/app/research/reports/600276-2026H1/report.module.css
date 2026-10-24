@@ -272,3 +272,106 @@
   .challengeActions{align-items:stretch}
   .challengeActions .button{width:100%}
 }
+
+
+/* M116: customer-readable answer, navigation, and optional provenance. */
+.reportNav{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:22px 0 4px;
+}
+.reportNav a{
+  display:inline-flex;
+  align-items:center;
+  border:1px solid #c9dfe1;
+  background:white;
+  border-radius:8px;
+  padding:11px 15px;
+  font-size:12px;
+  font-weight:700;
+  color:#215b65;
+  text-decoration:none;
+}
+.reportNav a:hover,
+.reportNav a:focus-visible,
+.directCitations a:focus-visible{
+  text-decoration:underline;
+  outline-offset:3px;
+}
+.directAnswer{
+  border:1px solid #cbdfe2;
+  border-left:4px solid #286a75;
+  border-radius:11px;
+  background:#f3f9f9;
+  padding:22px 24px;
+  margin:20px 0 24px;
+}
+.directAnswerTitle{
+  color:#235966;
+  font-weight:800;
+  font-size:13px;
+  margin:0 0 15px;
+}
+.directAnswer>p:not(.directAnswerTitle){
+  font-size:14px;
+  line-height:1.95;
+  color:#26434b;
+  margin:13px 0;
+}
+.directAnswer strong{
+  color:#143f4d;
+  overflow-wrap:anywhere;
+}
+.directQuote{
+  display:block;
+  padding:10px 14px;
+  border-left:3px solid #8ab1b7;
+  background:white;
+  margin:12px 0;
+}
+.directAnswer .directCaution{
+  color:#805346;
+}
+.directCitations{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 16px;
+  margin-top:20px;
+}
+.directCitations a{
+  font-size:12px;
+  line-height:1.65;
+  font-weight:750;
+  color:#155d6d;
+  overflow-wrap:anywhere;
+}
+.appendix{
+  margin:25px 0 35px;
+  border:1px solid #d6e4e6;
+  border-radius:13px;
+  padding:19px 22px;
+  background:#fff;
+}
+.appendix>summary{
+  color:#245661;
+  font-size:14px;
+  font-weight:800;
+  line-height:1.8;
+  cursor:pointer;
+}
+.appendix[open]>summary{
+  border-bottom:1px solid #e2ebed;
+  padding-bottom:13px;
+}
+.appendixHint{
+  color:#667f87;
+  font-size:12px;
+  line-height:1.8;
+  margin:15px 0 22px;
+}
+@media(max-width:750px){
+  .directAnswer{padding:17px}
+  .reportNav a{flex:1 1 100%}
+  .appendix{padding:15px}
+}

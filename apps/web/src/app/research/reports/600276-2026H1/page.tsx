@@ -542,15 +542,90 @@ export default function HengruiSourceReport() {
 
         {report && (
           <div aria-live="polite">
+            <nav
+              className={styles.reportNav}
+              aria-label="研究报告内容导航"
+            >
+              <a href="#evidence-summary">核心回答与来源</a>
+              <a href="#claim-review">核验研究观点</a>
+              <a href="#evidence-details">详细证据与溯源</a>
+            </nav>
 
             <section
               className={styles.answerFirst}
+              id="evidence-summary"
               aria-label="原始证据摘要"
             >
               <p className={styles.kicker}>
                 原始证据摘要 / 优先阅读
               </p>
               <h2>目前找到哪些证据？</h2>
+
+              <div
+                className={styles.directAnswer}
+                aria-label="核心研究问题的直接回答"
+              >
+                <p className={styles.directAnswerTitle}>
+                  核心研究问题 · 直接回答
+                </p>
+
+                <p>
+                  在原始公告的
+                  《{report.observations[0].statement_title}》中，
+                  “{report.observations[0].row_label}”
+                  对应的原始数值为
+                  <strong>
+                    {" "}{report.observations[0].value_verbatim}
+                  </strong>
+                  ；在
+                  《{report.observations[1].statement_title}》中，
+                  “{report.observations[1].row_label}”
+                  对应的原始数值为
+                  <strong>
+                    {" "}{report.observations[1].value_verbatim}
+                  </strong>
+                  。两项数值属于不同报表列示，
+                  本报告未认定它们可以直接比较或勾稽。
+                </p>
+
+                <p>
+                  关于创新药销售，当前定位到的管理层原文为：
+                  <span className={styles.directQuote}>
+                    {report.management_statement.text}
+                  </span>
+                </p>
+
+                <p className={styles.directCaution}>
+                  重要口径提示：上述63.16%的分母，
+                  按管理层原文为“药品销售收入”，
+                  不应直接改写成占公司整体营业收入的比例。
+                  这属于原文表述辨析，尚非独立财务语义认定。
+                </p>
+
+                <div className={styles.directCitations}>
+                  <a
+                    href={`${SOURCE.url}#page=${report.observations[0].page}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    REV1 · 原始PDF第{report.observations[0].page}页 ↗
+                  </a>
+                  <a
+                    href={`${SOURCE.url}#page=${report.observations[1].page}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    REV2 · 原始PDF第{report.observations[1].page}页 ↗
+                  </a>
+                  <a
+                    href={`${SOURCE.url}#page=${report.management_statement.page}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    M1 · 原始PDF第{report.management_statement.page}页 ↗
+                  </a>
+                </div>
+              </div>
 
               <p className={styles.answerIntro}>
                 在恒瑞医药2026年半年度原始公告中，
@@ -629,6 +704,7 @@ export default function HengruiSourceReport() {
 
             <section
               className={styles.challenge}
+              id="claim-review"
               aria-label="核验研究观点"
             >
               <p className={styles.kicker}>
@@ -840,6 +916,18 @@ export default function HengruiSourceReport() {
                 <small>研究发布已阻止</small>
               </div>
             </div>
+
+            <details
+              className={styles.appendix}
+              id="evidence-details"
+            >
+              <summary>
+                展开完整证据、核验范围与溯源记录
+              </summary>
+              <p className={styles.appendixHint}>
+                包含逐项报表数值、管理层原文、证据编号、
+                PDF文件哈希和未完成的财务语义核验事项。
+              </p>
 
             <section className={styles.intro}>
               <p className={styles.kicker}>
@@ -1083,6 +1171,7 @@ export default function HengruiSourceReport() {
                 </section>
               </aside>
             </div>
+            </details>
 
           </div>
         )}
