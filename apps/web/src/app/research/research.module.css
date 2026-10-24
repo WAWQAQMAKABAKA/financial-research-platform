@@ -1,0 +1,78 @@
+.page {
+  min-height:100vh;
+  padding:24px;
+  background:#f2f6f7;
+  color:#1b3441;
+  font-family:Arial,Helvetica,sans-serif;
+}
+.shell {max-width:1080px;margin:auto}
+.header {
+  display:flex;justify-content:space-between;
+  align-items:center;gap:14px;padding:12px 0 26px;
+}
+.brand {font-size:12px;font-weight:800;letter-spacing:.12em;color:#24515c}
+.headerStatus,.localBadge {
+  font-size:10px;font-weight:800;letter-spacing:.07em;
+  border:1px solid #abc5ca;padding:8px 12px;border-radius:20px;
+}
+.hero {
+  padding:39px 43px;
+  border-radius:18px;
+  color:white;
+  background:linear-gradient(115deg,#103443,#25636b);
+}
+.eyebrow {font-size:11px;font-weight:800;letter-spacing:.13em;color:#63838b}
+.hero .eyebrow {color:#c1e4e5}
+.hero h1 {font-size:clamp(30px,4vw,46px);max-width:770px;margin:16px 0}
+.hero>p:not(.eyebrow) {max-width:730px;font-size:15px;line-height:1.8;color:#e1eeee}
+.heroBoundary {font-size:12px;color:#d3e5e6;margin-top:22px}
+.researchCard {
+  background:white;border:1px solid #dbe7e9;border-radius:14px;
+  padding:30px;margin-top:22px;
+}
+.cardHeader {display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.cardHeader h2 {font-size:25px;margin:10px 0}
+.metadata {font-size:13px;color:#607985}
+.localBadge {color:#315c67;white-space:nowrap}
+.question {background:#f0f7f7;padding:21px;border-radius:10px;margin:24px 0}
+.question span {font-size:11px;font-weight:800;letter-spacing:.1em;color:#52737d}
+.question p {font-size:16px;line-height:1.8;margin-bottom:0}
+.flow {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.flow>div {border:1px solid #dfebed;border-radius:10px;padding:18px}
+.flow strong {font-size:12px;color:#397480}
+.flow h3 {font-size:16px;margin:12px 0 8px}
+.flow p {font-size:12px;color:#647d86;line-height:1.7;margin:0}
+.actionRow {
+  display:flex;gap:20px;justify-content:space-between;
+  align-items:center;margin-top:26px;flex-wrap:wrap;
+}
+.primary {
+  display:inline-block;background:#195968;color:white;
+  border-radius:8px;text-decoration:none;
+  padding:14px 20px;font-weight:750;font-size:14px;
+}
+.primary:focus-visible {outline:3px solid #8cbec5;outline-offset:3px}
+.actionRow p {flex:1 1 250px;font-size:12px;color:#657d87;line-height:1.7}
+.scope {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:23px 0}
+.scope>div {background:white;border:1px solid #dbe7e9;border-radius:12px;padding:23px}
+.scope h2 {font-size:17px;margin:0 0 12px}
+.scope p {font-size:13px;line-height:1.8;color:#607985;margin-bottom:0}
+.boundary {padding:23px;border:1px solid #e4d4cf;background:#fcf8f6;border-radius:12px}
+.boundary strong {color:#7b4d41}
+.boundary>p {font-size:12px;line-height:1.8;color:#6f615b}
+.apiStatus {font-size:12px;color:#486a73}
+.apiStatus span {color:#75838a}
+.developer {margin-top:25px;border-top:1px solid #d4e3e6;padding:20px 5px;font-size:13px}
+.developer summary {cursor:pointer;font-weight:750;color:#315c67}
+.developer p {font-size:12px;color:#657d87}
+.developer li {margin:12px 0}
+.developer a {color:#256072}
+.footer {padding:22px 0;font-size:11px;color:#6d858e}
+@media(max-width:700px) {
+  .page {padding:12px}
+  .header {flex-wrap:wrap}
+  .hero {padding:25px}
+  .researchCard {padding:20px}
+  .cardHeader {flex-wrap:wrap}
+  .flow,.scope {grid-template-columns:1fr}
+}

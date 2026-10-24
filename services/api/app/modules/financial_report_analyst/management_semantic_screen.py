@@ -44,6 +44,20 @@ _GROWTH = re.compile(
 )
 
 
+_SHARE_ZH = re.compile(
+    r"^创新药销售收入占(?P<denom>药品销售收入|公司总营业收入|"
+    r"公司整体营业收入|公司营业收入|合并营业收入)的"
+    + _NUM + r"%[。.]$"
+)
+
+_GROWTH_ZH = re.compile(
+    r"^(?P<subject>创新药销售收入|公司整体营业收入|"
+    r"公司总营业收入|公司营业收入|合并营业收入)"
+    r"同比(?P<verb>增长|下降)"
+    + _NUM + r"%[。.]$"
+)
+
+
 def _result(claim_id, evidence_id, reason, reject=False):
     return SemanticScreenResult(
         claim_id=claim_id or "UNSPECIFIED_CLAIM",
@@ -139,11 +153,30 @@ def screen_management_narrative(
             claim_id, evidence_id, "NARRATIVE_NOT_ASSERTED_UNAMBIGUOUSLY"
         )
 
-    share = _SHARE.fullmatch(text)
+
+    if (
+        any(c in text for c in ("“", "”", "‘", "’"))
+        or any(
+            word in text
+            for word in (
+                "不是", "并非", "不应", "不能",
+                "错误", "可能", "如果", "假如",
+                "是否", "据称", "不代表", "假设",
+            )
+        )
+    ):
+        return _result(
+            claim_id,
+            evidence_id,
+            "NARRATIVE_NOT_ASSERTED_UNAMBIGUOUSLY",
+        )
+
+    share = _SHARE.fullmatch(text) or _SHARE_ZH.fullmatch(text)
     if share:
         same = Decimal(share["pct"]) == Decimal(source["share"])
         correct_denominator = share["denom"] in {
-            "drug sales revenue", "total drug sales"
+            "drug sales revenue", "total drug sales",
+            "药品销售收入",
         }
 
         if same and not correct_denominator:
@@ -163,7 +196,7 @@ def screen_management_narrative(
             "SOURCE_SHARE_NOT_FINANCIALLY_QUALIFIED",
         )
 
-    growth = _GROWTH.fullmatch(text)
+    growth = _GROWTH.fullmatch(text) or _GROWTH_ZH.fullmatch(text)
     if growth:
         same = Decimal(growth["pct"]) == Decimal(source["growth"])
 
@@ -173,7 +206,9 @@ def screen_management_narrative(
                 "GROWTH_PERCENTAGE_NOT_SOURCE_MATCHED",
             )
 
-        claim_increases = growth["verb"] in {"grew", "increased"}
+        claim_increases = growth["verb"] in {
+            "grew", "increased", "增长",
+        }
         source_increases = source["direction"] == "增长"
 
         if claim_increases != source_increases:
@@ -182,7 +217,9 @@ def screen_management_narrative(
                 "SOURCE_GROWTH_DIRECTION_MISMATCH", True,
             )
 
-        if growth["subject"] != "innovative-drug sales":
+        if growth["subject"] not in {
+            "innovative-drug sales", "创新药销售收入",
+        }:
             return _result(
                 claim_id, evidence_id,
                 "SOURCE_GROWTH_METRIC_SUBSTITUTED", True,

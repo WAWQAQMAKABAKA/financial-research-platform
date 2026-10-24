@@ -145,3 +145,84 @@ def test_unrecognized_source_sentence_abstains():
         "Innovative-drug sales were 7.89% of total company revenue.",
         m,
     ).verdict.value == "UNCERTAIN"
+
+
+@pytest.mark.parametrize("text,verdict,reason", [
+    (
+        "创新药销售收入占公司总营业收入的7.89%。",
+        "REJECT",
+        "SOURCE_SHARE_DENOMINATOR_SUBSTITUTED",
+    ),
+    (
+        "创新药销售收入占药品销售收入的7.89%。",
+        "UNCERTAIN",
+        "SOURCE_SHARE_NOT_FINANCIALLY_QUALIFIED",
+    ),
+    (
+        "创新药销售收入占药品销售收入的9.99%。",
+        "REJECT",
+        "SOURCE_SHARE_PERCENTAGE_MISMATCH",
+    ),
+    (
+        "公司整体营业收入同比增长4.56%。",
+        "REJECT",
+        "SOURCE_GROWTH_METRIC_SUBSTITUTED",
+    ),
+    (
+        "创新药销售收入同比增长4.56%。",
+        "UNCERTAIN",
+        "SOURCE_GROWTH_NOT_FINANCIALLY_QUALIFIED",
+    ),
+    (
+        "创新药销售收入同比下降4.56%。",
+        "REJECT",
+        "SOURCE_GROWTH_DIRECTION_MISMATCH",
+    ),
+    (
+        "公司整体营业收入同比增长99%。",
+        "UNCERTAIN",
+        "GROWTH_PERCENTAGE_NOT_SOURCE_MATCHED",
+    ),
+    (
+        "创新药销售收入占公司总营业收入的9.99%。",
+        "UNCERTAIN",
+        "SOURCE_SHARE_NOT_FINANCIALLY_QUALIFIED",
+    ),
+])
+def test_chinese_bounded_claims(text, verdict, reason):
+    result = judge(text)
+    assert result.verdict.value == verdict
+    assert result.reason == reason
+    assert result.financial_semantic_review == "NOT_QUALIFIED"
+    assert result.research_publication == "BLOCKED"
+    assert result.compared_evidence_ids == (packet()["evidence_id"],)
+
+
+@pytest.mark.parametrize("text", [
+    "创新药销售收入占公司总营业收入的7.89%？",
+    "“创新药销售收入占公司总营业收入的7.89%。”",
+    "创新药销售收入可能占公司总营业收入的7.89%。",
+    "创新药销售收入占公司总营业收入的7.89%，但这是错误的。",
+    "创新药销售收入占公司总营业收入的7.89%",
+    "这说明创新药的估值应该上涨。",
+])
+def test_chinese_ambiguous_or_unrecognized_abstains(text):
+    result = judge(text)
+    assert result.verdict.value == "UNCERTAIN"
+    assert result.research_publication == "BLOCKED"
+
+
+def test_chinese_tampered_binding_and_pit_fail_closed():
+    candidate = "创新药销售收入占公司总营业收入的7.89%。"
+
+    wrong = judge(candidate, evidence_id="forged")
+    assert wrong.verdict.value == "UNCERTAIN"
+    assert wrong.reason == "EVIDENCE_BINDING_NOT_VERIFIED"
+
+    before = datetime(
+        2026, 8, 20, 23, 59,
+        tzinfo=ZoneInfo("Asia/Shanghai"),
+    )
+    early = judge(candidate, as_of=before)
+    assert early.verdict.value == "UNCERTAIN"
+    assert early.reason == "SOURCE_OR_PIT_UNAVAILABLE"

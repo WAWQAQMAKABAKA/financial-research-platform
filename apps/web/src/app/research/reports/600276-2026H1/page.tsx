@@ -104,6 +104,50 @@ type ReviewPacket = {
   };
 };
 
+
+const REVIEW_REASONS_ZH: Record<string, string> = {
+  SOURCE_SHARE_DENOMINATOR_SUBSTITUTED:
+    "原文以药品销售收入为分母，而拟议表述错误地替换为公司整体营业收入。",
+  SOURCE_SHARE_PERCENTAGE_MISMATCH:
+    "拟议占比与当前所引管理层原文不一致。",
+  SOURCE_SHARE_NOT_FINANCIALLY_QUALIFIED:
+    "拟议表述保留了原文的药品销售收入分母，但财务语义尚未独立核验。",
+  SOURCE_GROWTH_METRIC_SUBSTITUTED:
+    "把创新药销售收入的增长率错误归于公司整体营业收入。",
+  SOURCE_GROWTH_DIRECTION_MISMATCH:
+    "拟议表述的增长或下降方向与当前所引原文不一致。",
+  SOURCE_GROWTH_NOT_FINANCIALLY_QUALIFIED:
+    "增长表述与所引原文一致，但尚未完成独立财务语义核验。",
+  GROWTH_PERCENTAGE_NOT_SOURCE_MATCHED:
+    "增长比例与当前所引原文不匹配，尚无法确认。",
+  NARRATIVE_NOT_ASSERTED_UNAMBIGUOUSLY:
+    "表述存在疑问、否定或条件语气，无法按明确断言核验。",
+  NARRATIVE_NOT_WITHIN_BOUNDED_GRAMMAR:
+    "当前限定规则无法识别该表述，不能视为核验通过。",
+  UNSTRUCTURED_NARRATIVE:
+    "该表述超出当前可处理的范围。",
+};
+
+const LIMITATIONS_ZH: Record<string, string> = {
+  "Statement cells are verified literal source observations.":
+    "财务报表数值仅完成原始位置和字面内容核验。",
+  "Management statements are attributed, not independently endorsed.":
+    "管理层表述仅作注明来源的引用，不代表独立认可。",
+  "No financial comparability, causality, inference, or publication is approved.":
+    "尚未批准财务数据可比性、因果推断、分析结论或报告发布。",
+};
+
+function verdictZh(value: "REJECT" | "UNCERTAIN"): string {
+  return value === "REJECT"
+    ? "与所引原文不符"
+    : "尚无法确认";
+}
+
+function reviewReasonZh(code: string): string {
+  return REVIEW_REASONS_ZH[code] ??
+    `未识别的核验原因（${code}）；不得视为已通过核验。`;
+}
+
 const EXPECTED_ROWS = [
   { title: "合并利润表", row: "其中：营业收入" },
   { title: "母公司利润表", row: "一、营业收入" },
@@ -288,17 +332,15 @@ function verifiedClaimReview(
 
 function exampleClaim(
   source: ReportPacket,
-  denominator: "total company revenue" | "drug sales revenue",
+  denominator: "公司总营业收入" | "药品销售收入",
 ): string {
   const share = source.management_statement.text.match(
     /比重达([0-9]+(?:\.[0-9]+)?)%/,
   );
+
   if (!share) return "";
 
-  return (
-    `Innovative-drug sales were ${share[1]}% of ` +
-    `${denominator}.`
-  );
+  return `创新药销售收入占${denominator}的${share[1]}%。`;
 }
 
 function OriginalLink({ page }: { page: number }) {
@@ -309,7 +351,7 @@ function OriginalLink({ page }: { page: number }) {
       target="_blank"
       rel="noopener noreferrer"
     >
-      Open original disclosure · PDF p. {page} ↗
+      查看原始公告 · PDF第{page}页 ↗
     </a>
   );
 }
@@ -353,8 +395,8 @@ export default function HengruiSourceReport() {
       setReport(packet);
     } catch {
       setError(
-        "The verified report is unavailable or did not meet its " +
-        "source/review contract. No report content was released."
+        "原始报告不可用，或未通过来源及核验关系检查；" +
+        "本次不展示未经确认的报告内容。"
       );
     } finally {
       setLoading(false);
@@ -414,8 +456,8 @@ export default function HengruiSourceReport() {
       setReviewPacket(packet);
     } catch {
       setReviewError(
-        "The review is unavailable or its evidence does not " +
-        "match this report. No verdict was released.",
+        "观点核验不可用，或引用证据与当前报告不一致；" +
+        "本次不展示核验结论。",
       );
     } finally {
       setReviewBusy(false);
@@ -425,100 +467,108 @@ export default function HengruiSourceReport() {
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
+
         <header className={styles.top}>
           <Link href="/research" className={styles.brand}>
-            FR / FINANCIAL RESEARCH
+            FR / 金融研究平台
           </Link>
-          <Link href="/research/source-workspace"
-            className={styles.back}>
-            Source workspace ↗
+          <Link href="/research" className={styles.back}>
+            ← 返回研究首页
           </Link>
         </header>
 
         <section className={styles.hero}>
           <p className={styles.kicker}>
-            M112 / SOURCE-BOUND RESEARCH REPORT
+            原始证据研究报告 / 本地预览
           </p>
+
           <h1>
-            恒瑞医药 <span>2026 H1 Research</span>
+            恒瑞医药 <span>2026年半年度研究</span>
           </h1>
+
           <p>
-            A readable, traceable account of two income-statement
-            source observations and an attributed management
-            discussion. No valuation, accounting reconciliation,
-            investment conclusion or recommendation.
+            基于原始公告展示两项财务报表数据及一段管理层披露。
+            每项证据均保留原始来源。尚未进行会计口径勾稽、
+            财务语义认定、估值分析或投资判断。
           </p>
+
           <div className={styles.heroMeta}>
-            <span>600276 · 2026 H1</span>
-            <span>Original disclosure · 20 Aug 2026</span>
-            <span>LOCAL / UNPUBLISHED</span>
+            <span>600276 · 2026年上半年</span>
+            <span>公告日期：2026年8月20日</span>
+            <span>本地预览 · 尚未发布</span>
           </div>
         </section>
 
         <div className={styles.toolbar}>
           <div>
-            <strong>Assemble original-source report</strong>
+            <strong>从原始公告生成研究预览</strong>
             <p>
-              Rechecks the local hash-pinned PDF.
-              No paid model call, persistence or publication.
+              重新校验本地原始PDF、文件哈希及证据关联。
+              不调用付费模型，不保存或发布研究报告。
             </p>
           </div>
+
           <button
             type="button"
             className={styles.button}
             onClick={loadReport}
             disabled={loading || reviewBusy}
           >
-            {loading
-              ? "Verifying original disclosure…"
-              : "Generate report preview"}
+            {loading ? "正在核验原始公告…" : "生成研究预览"}
           </button>
         </div>
 
         {error && (
           <div className={styles.error} role="alert">
-            <strong>Report withheld</strong>
+            <strong>报告内容暂不展示</strong>
             <p>{error}</p>
-            <p>Financial-semantic approval and publication remain blocked.</p>
+            <p>财务语义核验尚未完成，研究发布仍被阻止。</p>
           </div>
         )}
 
         {!report && !error && (
           <section className={styles.empty} aria-live="polite">
-            <h2>{loading ? "Checking evidence…" : "Report not yet assembled"}</h2>
+            <h2>
+              {loading
+                ? "正在核对原始证据…"
+                : "尚未生成研究预览"}
+            </h2>
             <p>
-              Report content is displayed only after the original
-              disclosure and source bindings pass verification.
+              只有原始公告及其证据关联通过核验，
+              才会展示对应的研究内容。
             </p>
           </section>
         )}
 
         {report && (
           <div aria-live="polite">
+
             <section
               className={styles.answerFirst}
-              aria-label="Source-bound research answer"
+              aria-label="原始证据摘要"
             >
               <p className={styles.kicker}>
-                SOURCE-BOUND ANSWER / READ FIRST
+                原始证据摘要 / 优先阅读
               </p>
-              <h2>What the located evidence shows</h2>
+              <h2>目前找到哪些证据？</h2>
+
               <p className={styles.answerIntro}>
-                Two separately identified financial-statement rows
-                and one attributed management passage were located
-                in the original Hengrui disclosure. The values below
-                retain their original source context.
+                在恒瑞医药2026年半年度原始公告中，
+                已定位两项财务报表营业收入数据，
+                以及一段管理层关于创新药销售的披露。
+                以下数值均保留各自的来源和原始口径。
               </p>
 
               <div className={styles.answerGrid}>
                 {report.observations.map((o) => (
                   <article
-                    className={styles.answerItem}
                     key={o.claim_id}
+                    className={styles.answerItem}
                   >
                     <span className={styles.smallTag}>
-                      {o.claim_id} · SOURCE CELL
+                      {o.claim_id} · 财务报表原始数据
                     </span>
+
                     <h3>{o.statement_title}</h3>
                     <p className={styles.answerRow}>
                       {o.row_label}
@@ -526,9 +576,11 @@ export default function HengruiSourceReport() {
                     <p className={styles.answerValue}>
                       {o.value_verbatim}
                     </p>
+
                     <p className={styles.answerContext}>
-                      Original source context: {o.statement_context}
+                      公告印刷口径：{o.statement_context}
                     </p>
+
                     <OriginalLink page={o.page} />
                   </article>
                 ))}
@@ -536,16 +588,20 @@ export default function HengruiSourceReport() {
 
               <article className={styles.answerManagement}>
                 <span className={styles.smallTag}>
-                  M1 · ATTRIBUTED MANAGEMENT DISCLOSURE
+                  M1 · 注明来源的管理层原文
                 </span>
-                <h3>Innovative-drug sales discussion</h3>
+
+                <h3>创新药销售情况</h3>
+
                 <blockquote className={styles.answerPassage}>
                   {report.management_statement.text}
                 </blockquote>
+
                 <p className={styles.answerContext}>
-                  This is management&apos;s disclosed wording, not an
-                  independently approved financial interpretation.
+                  该段为管理层披露的原文，
+                  不是已获得独立财务语义核验的研究结论。
                 </p>
+
                 <OriginalLink
                   page={report.management_statement.page}
                 />
@@ -553,40 +609,46 @@ export default function HengruiSourceReport() {
 
               <div className={styles.answerBoundary}>
                 <strong>
-                  What these three evidence items do not establish
+                  这些证据目前尚不能证明什么？
                 </strong>
+
                 <p>
-                  This assembled evidence packet does not establish
-                  accounting comparability between the two statement
-                  rows, a reconciliation with the management sales
-                  figure, a causal explanation, or company-wide
-                  performance growth. It does not imply that the
-                  complete disclosure lacks other relevant evidence.
+                  尚未完成两项报表数据之间的口径可比性核验，
+                  也未建立其与创新药销售收入之间的财务勾稽关系。
+                  当前定位结果不能直接证明因果关系或公司整体收入增长。
+                  这不意味着完整公告不存在其他相关证据。
                 </p>
+
                 <p>
-                  Analyst interpretation: WITHHELD.
-                  Financial-semantic review: NOT PERFORMED.
-                  Publication: BLOCKED.
+                  分析结论：暂不生成。
+                  财务语义核验：未完成。
+                  研究发布：已阻止。
                 </p>
               </div>
             </section>
 
-
             <section
               className={styles.challenge}
-              aria-label="Challenge a proposed claim"
+              aria-label="核验研究观点"
             >
               <p className={styles.kicker}>
-                M114 / CHALLENGE A CLAIM
+                研究观点核验 / 指定管理层原文
               </p>
-              <h2>Does this interpretation match the source?</h2>
+
+              <h2>拟提出的观点是否符合原文？</h2>
+
               <p className={styles.challengeIntro}>
-                Test a proposed statement against the verified
-                management passage (M1, PDF page 20).
-                This bounded Reviewer can reject recognized
-                substitutions or return UNCERTAIN.
-                It does not review the accounting meaning of
-                the two statement cells.
+                将拟议表述与原始公告第20页的管理层原文比对。
+                当前规则只能识别限定句式中的明确矛盾，
+                或返回“尚无法确认”。
+                不能据此批准完整的财务研究结论。
+              </p>
+
+              <p className={styles.challengeIntro}>
+                当前支持少量明确的中文断言句式，
+                包括创新药销售收入占比及同比增长表述。
+                其他句式、疑问或带条件的表达仍可能返回“尚无法确认”。
+                这不代表观点正确，也不构成独立财务语义核验。
               </p>
 
               <div className={styles.challengeOptions}>
@@ -595,26 +657,33 @@ export default function HengruiSourceReport() {
                   disabled={reviewBusy}
                   onClick={() => {
                     setCandidate(
-                      exampleClaim(report, "total company revenue"),
+                      exampleClaim(
+                        report,
+                        "公司总营业收入",
+                      ),
                     );
                     setReviewPacket(null);
                     setReviewError("");
                   }}
                 >
-                  Try an incorrect denominator
+                  示例一：错误替换收入分母
                 </button>
+
                 <button
                   type="button"
                   disabled={reviewBusy}
                   onClick={() => {
                     setCandidate(
-                      exampleClaim(report, "drug sales revenue"),
+                      exampleClaim(
+                        report,
+                        "药品销售收入",
+                      ),
                     );
                     setReviewPacket(null);
                     setReviewError("");
                   }}
                 >
-                  Try the disclosed denominator
+                  示例二：保留原文收入分母
                 </button>
               </div>
 
@@ -622,8 +691,9 @@ export default function HengruiSourceReport() {
                 htmlFor="m114-candidate"
                 className={styles.challengeLabel}
               >
-                Proposed claim
+                待核验表述
               </label>
+
               <textarea
                 id="m114-candidate"
                 className={styles.challengeInput}
@@ -636,13 +706,15 @@ export default function HengruiSourceReport() {
                   setReviewPacket(null);
                   setReviewError("");
                 }}
-                placeholder="Write a statement about the management disclosure..."
+                placeholder="输入有关管理层披露的拟议表述…"
               />
+
               <div className={styles.challengeActions}>
                 <span>
-                  {candidate.length}/400 characters ·
-                  Local source-bound review only
+                  {candidate.length}/400字 ·
+                  仅限本地原始证据核验
                 </span>
+
                 <button
                   type="button"
                   className={styles.button}
@@ -655,19 +727,19 @@ export default function HengruiSourceReport() {
                   onClick={reviewCandidate}
                 >
                   {reviewBusy
-                    ? "Checking claim…"
-                    : "Review proposed claim"}
+                    ? "正在核验表述…"
+                    : "核验这项观点"}
                 </button>
               </div>
 
               {reviewError && (
                 <div
-                  role="alert"
                   className={styles.challengeError}
+                  role="alert"
                 >
-                  <strong>Review withheld</strong>
+                  <strong>本次观点核验未能完成</strong>
                   <p>{reviewError}</p>
-                  <p>Publication remains BLOCKED.</p>
+                  <p>研究发布仍处于阻止状态。</p>
                 </div>
               )}
 
@@ -677,51 +749,71 @@ export default function HengruiSourceReport() {
                   aria-live="polite"
                 >
                   <p className={styles.kicker}>
-                    SOURCE-BOUND REVIEW / UNPUBLISHED
+                    原始证据观点核验 / 尚未发布
                   </p>
+
                   <h3>
-                    Verdict: {reviewPacket.review.verdict}
+                    核验结果：
+                    {verdictZh(reviewPacket.review.verdict)}
                   </h3>
+
                   <p>
-                    <strong>Proposed claim:</strong>{" "}
+                    <strong>待核验表述：</strong>{" "}
                     {reviewPacket.claim.text}
                   </p>
+
                   <p>
-                    <strong>Reviewer reason:</strong>{" "}
-                    {reviewPacket.review.reason.replaceAll("_", " ")}
+                    <strong>核验依据：</strong>{" "}
+                    {reviewReasonZh(
+                      reviewPacket.review.reason
+                    )}
                   </p>
 
                   <div className={styles.challengeEvidence}>
-                    <strong>Compared original passage</strong>
+                    <strong>用于比对的管理层原文</strong>
+
                     <blockquote>
                       {reviewPacket.evidence.excerpt}
                     </blockquote>
+
                     <OriginalLink
                       page={reviewPacket.evidence.source_page}
                     />
                   </div>
 
                   <p className={styles.challengeCaution}>
-                    REJECT identifies a recognized contradiction
-                    with this source passage. UNCERTAIN does
-                    not mean approval. Financial semantics:
-                    NOT QUALIFIED. Publication: BLOCKED.
+                    “与所引原文不符”仅指当前限定规则识别到的
+                    原文矛盾，不代表已全面核验整份公告。
+                    “尚无法确认”不等于核验通过。
+                    财务语义尚未独立认定，研究发布已阻止。
                   </p>
 
                   <details className={styles.details}>
-                    <summary>Claim, review and evidence identity</summary>
-                    <p>Claim: {reviewPacket.claim.claim_id}</p>
-                    <p className={styles.hash}>
-                      Evidence ID: {reviewPacket.evidence.evidence_id}
+                    <summary>
+                      查看观点、核验记录与证据身份
+                    </summary>
+
+                    <p>
+                      观点编号：{reviewPacket.claim.claim_id}
                     </p>
                     <p className={styles.hash}>
-                      Review ID: {reviewPacket.review_id}
+                      证据编号：
+                      {reviewPacket.evidence.evidence_id}
                     </p>
                     <p className={styles.hash}>
-                      Source report: {report.report_identity}
+                      核验记录编号：{reviewPacket.review_id}
                     </p>
-                    <p>Review scope: {reviewPacket.review.review_scope}</p>
-                    <p>As-of: {reviewPacket.as_of}</p>
+                    <p className={styles.hash}>
+                      所属研究报告：{report.report_identity}
+                    </p>
+                    <p>
+                      核验范围：仅限指定管理层原文的矛盾识别
+                    </p>
+                    <p>核验时点：{reviewPacket.as_of}</p>
+                    <p className={styles.hash}>
+                      原始核验原因代码：
+                      {reviewPacket.review.reason}
+                    </p>
                   </details>
                 </article>
               )}
@@ -729,30 +821,42 @@ export default function HengruiSourceReport() {
 
             <div className={styles.summary}>
               <div>
-                <span>Financial statement observations</span>
+                <span>财务报表原始数据</span>
                 <strong>02</strong>
-                <small>Literal source text/location checked</small>
+                <small>已核验原始位置与字面内容</small>
               </div>
+
               <div>
-                <span>Management disclosures</span>
+                <span>管理层披露</span>
                 <strong>01</strong>
-                <small>Attributed original passage</small>
+                <small>已定位并注明来源的原文</small>
               </div>
+
               <div>
-                <span>Financial-semantic qualification</span>
-                <strong className={styles.blocked}>NOT PERFORMED</strong>
-                <small>Publication BLOCKED</small>
+                <span>独立财务语义核验</span>
+                <strong className={styles.blocked}>
+                  尚未完成
+                </strong>
+                <small>研究发布已阻止</small>
               </div>
             </div>
 
             <section className={styles.intro}>
-              <p className={styles.kicker}>01 / RESEARCH QUESTION</p>
-              <h2>Revenue source and management context</h2>
-              <p>{report.question}</p>
+              <p className={styles.kicker}>
+                01 / 核心研究问题
+              </p>
+              <h2>营业收入数据与管理层披露</h2>
+
+              <p>
+                恒瑞医药2026年半年度报告中有哪些
+                营业收入相关数据和创新药销售披露？
+                现有证据能够证明什么，
+                哪些财务解释仍需进一步核验？
+              </p>
+
               <p className={styles.note}>
-                This preview reports only what was independently
-                located in the disclosure. The observations below
-                have not been qualified for financial comparability.
+                当前展示的是已核验来源位置的研究预览，
+                不构成独立会计口径或财务指标可比性认定。
               </p>
             </section>
 
@@ -761,45 +865,66 @@ export default function HengruiSourceReport() {
                 <section className={styles.sectionBlock}>
                   <div className={styles.sectionHead}>
                     <div>
-                      <p className={styles.kicker}>02 / SOURCE OBSERVATIONS</p>
-                      <h2>Financial statement evidence</h2>
+                      <p className={styles.kicker}>
+                        02 / 财务报表证据
+                      </p>
+                      <h2>财务报表数据及核验记录</h2>
                     </div>
-                    <span className={styles.smallTag}>2 verified locations</span>
+                    <span className={styles.smallTag}>
+                      已定位2项数据
+                    </span>
                   </div>
 
-                  {report.observations.map((o, i) => (
-                    <article className={styles.card} key={o.claim_id}>
+                  {report.observations.map((o) => (
+                    <article
+                      key={o.claim_id}
+                      className={styles.card}
+                    >
                       <div className={styles.cardTop}>
                         <span className={styles.smallTag}>
-                          {o.claim_id} · ORIGINAL SOURCE CELL
+                          {o.claim_id} · 原始报表单元格
                         </span>
-                        <span>0{i + 1}</span>
                       </div>
+
                       <h3>{o.statement_title}</h3>
-                      <div className={styles.value}>{o.value_verbatim}</div>
+                      <div className={styles.value}>
+                        {o.value_verbatim}
+                      </div>
+
                       <p className={styles.label}>
-                        Original row: {o.row_label}
+                        原始行名：{o.row_label}
                       </p>
                       <p className={styles.label}>
-                        Column: {o.column_header}
+                        原始列名：{o.column_header}
                       </p>
                       <p className={styles.note}>
-                        Printed context: {o.statement_context}
+                        印刷单位及期间：{o.statement_context}
                       </p>
+
                       <div className={styles.review}>
-                        {o.review_result.replaceAll("_", " ")}
+                        已核验来源位置及字面数值
                         <p>
-                          This check establishes literal source
-                          location, not accounting meaning.
+                          不代表已经独立认定其会计口径。
                         </p>
                       </div>
+
                       <OriginalLink page={o.page} />
+
                       <details className={styles.details}>
-                        <summary>Claim and evidence trace</summary>
-                        <p>{o.text}</p>
-                        <p>Review scope: {o.review_scope}</p>
+                        <summary>
+                          查看原文单元格与证据关联
+                        </summary>
+                        <p>
+                          在“{o.statement_title}”中，
+                          “{o.column_header}”列下，
+                          “{o.row_label}”的原始数值为
+                          “{o.value_verbatim}”。
+                        </p>
                         <p className={styles.hash}>
-                          Evidence ID: {o.evidence_id}
+                          证据编号：{o.evidence_id}
+                        </p>
+                        <p>
+                          核验范围：原始单元格位置与字面内容
                         </p>
                       </details>
                     </article>
@@ -807,55 +932,62 @@ export default function HengruiSourceReport() {
                 </section>
 
                 <section className={styles.sectionBlock}>
-                  <p className={styles.kicker}>03 / MANAGEMENT DISCUSSION</p>
-                  <h2>What management disclosed</h2>
+                  <p className={styles.kicker}>
+                    03 / 管理层原文
+                  </p>
+                  <h2>创新药销售披露</h2>
+
                   <article className={styles.card}>
                     <span className={styles.smallTag}>
-                      M1 · ATTRIBUTED MANAGEMENT STATEMENT
+                      M1 · 注明来源的管理层表述
                     </span>
+
                     <blockquote className={styles.passage}>
                       {report.management_statement.text}
                     </blockquote>
+
                     <p className={styles.note}>
-                      The percentages and denominator above are
-                      management&apos;s wording in the original disclosure.
-                      This is not an independently established
-                      accounting relationship.
+                      上述销售金额、增长率及收入分母
+                      均来自管理层原文，
+                      并非独立认定的会计结论。
                     </p>
+
                     <div className={styles.review}>
-                      SOURCE PASSAGE LOCATED ONLY
+                      已定位管理层原文 · 财务语义尚未核验
                     </div>
+
                     <OriginalLink
                       page={report.management_statement.page}
                     />
+
                     <details className={styles.details}>
-                      <summary>Evidence and review trace</summary>
-                      <p>
-                        Review scope:{" "}
-                        {report.management_statement.review_scope}
-                      </p>
+                      <summary>查看管理层证据关联</summary>
                       <p className={styles.hash}>
-                        Evidence ID:{" "}
+                        证据编号：
                         {report.management_statement.evidence_id}
+                      </p>
+                      <p>
+                        核验范围：原始PDF文本及文字位置
                       </p>
                     </details>
                   </article>
                 </section>
 
                 <section className={styles.sectionBlock}>
-                  <p className={styles.kicker}>04 / ANALYST INTERPRETATION</p>
-                  <h2>Interpretation withheld</h2>
+                  <p className={styles.kicker}>
+                    04 / 研究解释
+                  </p>
+                  <h2>分析结论暂不生成</h2>
+
                   <div className={styles.withheld}>
-                    <strong>{report.analyst_interpretation.status}</strong>
+                    <strong>暂不提供分析结论</strong>
                     <p>
-                      {report.analyst_interpretation.reason.replaceAll(
-                        "_", " "
-                      )}
+                      原因：尚未完成独立财务语义核验。
                     </p>
                     <p>
-                      No financial reconciliation, causal explanation,
-                      investment thesis or forward-looking conclusion
-                      is authorized by this source-only report.
+                      当前来源定位结果不能单独支持
+                      财务数据勾稽、因果解释、
+                      投资观点或前瞻性判断。
                     </p>
                   </div>
                 </section>
@@ -863,82 +995,107 @@ export default function HengruiSourceReport() {
 
               <aside className={styles.side}>
                 <section className={styles.sideCard}>
-                  <p className={styles.kicker}>PUBLICATION BOUNDARY</p>
-                  <h2>Evidence, not approval</h2>
+                  <p className={styles.kicker}>
+                    研究发布限制
+                  </p>
+                  <h2>证据通过定位，不等于结论获批</h2>
+
                   <dl className={styles.facts}>
                     <div>
-                      <dt>Research publication</dt>
-                      <dd>{report.research_publication}</dd>
+                      <dt>研究发布</dt>
+                      <dd>已阻止</dd>
                     </div>
                     <div>
-                      <dt>Financial semantics</dt>
-                      <dd>{report.financial_semantic_review}</dd>
+                      <dt>财务语义核验</dt>
+                      <dd>尚未完成</dd>
                     </div>
                     <div>
-                      <dt>Storage</dt>
-                      <dd>{report.report_storage}</dd>
+                      <dt>报告存储</dt>
+                      <dd>未持久化保存</dd>
                     </div>
                   </dl>
                 </section>
 
                 <section className={styles.sideCard}>
-                  <p className={styles.kicker}>SOURCE PROVENANCE</p>
-                  <h2>Original disclosure</h2>
-                  <p className={styles.note}>
-                    恒瑞医药 · 2026 H1
+                  <p className={styles.kicker}>
+                    原始来源与证据溯源
                   </p>
+
+                  <h2>原始公告</h2>
+
+                  <p className={styles.note}>
+                    恒瑞医药 · 2026年半年度
+                  </p>
+
                   <a
-                    className={styles.source}
                     href={SOURCE.url}
+                    className={styles.source}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Open full original PDF ↗
+                    查看完整原始PDF ↗
                   </a>
+
                   <details className={styles.details}>
-                    <summary>Report identity and hashes</summary>
+                    <summary>
+                      查看报告身份和文件哈希
+                    </summary>
+
                     <p className={styles.hash}>
-                      Report identity: {report.report_identity}
+                      报告身份编号：{report.report_identity}
                     </p>
                     <p className={styles.hash}>
-                      Source draft ID: {report.source_draft_id}
+                      来源草稿编号：{report.source_draft_id}
                     </p>
                     <p className={styles.hash}>
-                      Document: {report.document_id}
+                      原始文档编号：{report.document_id}
                     </p>
                     <p className={styles.hash}>
-                      Original SHA-256: {report.source_sha256}
+                      原始PDF SHA-256：
+                      {report.source_sha256}
                     </p>
                     <p className={styles.hash}>
-                      Canonical SHA-256:{" "}
+                      规范化文本 SHA-256：
                       {report.canonical_sha256}
                     </p>
-                    <p className={styles.hash}>
-                      As-of: {report.as_of}
+                    <p>
+                      研究时点：{report.as_of}
                     </p>
-                    <p className={styles.hash}>
-                      Generated: {report.generated_at}
+                    <p>
+                      报告生成时间：{report.generated_at}
                     </p>
                   </details>
                 </section>
 
                 <section className={styles.sideCard}>
-                  <p className={styles.kicker}>RESEARCH LIMITATIONS</p>
+                  <p className={styles.kicker}>
+                    研究限制
+                  </p>
+
                   <ul className={styles.limits}>
                     {report.limitations.map((item) => (
-                      <li key={item}>{item}</li>
+                      <li key={item}>
+                        {LIMITATIONS_ZH[item] ??
+                          `尚未翻译的原始研究限制：${item}`}
+                      </li>
                     ))}
                   </ul>
                 </section>
               </aside>
             </div>
+
           </div>
         )}
 
         <footer className={styles.footer}>
-          <span>Financial Research Platform · Source report preview</span>
-          <span>No customer publication or financial-semantic approval</span>
+          <span>
+            金融研究平台 · 原始证据研究预览
+          </span>
+          <span>
+            独立财务语义核验尚未完成 · 禁止对外发布
+          </span>
         </footer>
+
       </div>
     </main>
   );

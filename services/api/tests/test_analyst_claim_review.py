@@ -119,3 +119,37 @@ def test_overlong_and_empty_proposals_rejected(monkeypatch):
             module.review_analyst_draft(
                 Path("/offline-synthetic.pdf"), draft, as_of=WHEN,
             )
+
+
+@pytest.mark.parametrize("candidate,verdict,reason", [
+    (
+        "创新药销售收入占公司总营业收入的7.89%。",
+        "REJECT",
+        "SOURCE_SHARE_DENOMINATOR_SUBSTITUTED",
+    ),
+    (
+        "创新药销售收入占药品销售收入的7.89%。",
+        "UNCERTAIN",
+        "SOURCE_SHARE_NOT_FINANCIALLY_QUALIFIED",
+    ),
+])
+def test_chinese_manual_draft_source_binding(
+    monkeypatch, candidate, verdict, reason,
+):
+    source = setup_source(monkeypatch)
+    result = module.review_analyst_draft(
+        Path("/offline-synthetic.pdf"),
+        candidate,
+        as_of=WHEN,
+    )
+
+    assert result["claim"]["text"] == candidate
+    assert result["claim"]["evidence_ids"] == [source["evidence_id"]]
+    assert result["review"]["verdict"] == verdict
+    assert result["review"]["reason"] == reason
+    assert result["review"]["compared_evidence_ids"] == [
+        source["evidence_id"]
+    ]
+    assert result["evidence"]["excerpt"] == PASSAGE
+    assert result["research_publication"] == "BLOCKED"
+    assert result["financial_semantic_review"] == "NOT_QUALIFIED"
