@@ -388,3 +388,9 @@
 .qaResult h3{font-size:17px;color:#254a55}
 .qaResult .answerValue{margin:10px 0}
 @media(max-width:750px){.qaPanel{padding:18px}.qaForm button{width:100%}}
+
+/* M120: supported question selectors, secondary evidence workflow. */
+.qaExamples{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
+.qaExamples button{background:#f2f8f8;border:1px solid #bdd2d7;border-radius:8px;color:#24535f;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.qaExamples button:disabled{opacity:.55;cursor:wait}
+.qaExamples button:focus-visible{outline:3px solid #417e91;outline-offset:2px}

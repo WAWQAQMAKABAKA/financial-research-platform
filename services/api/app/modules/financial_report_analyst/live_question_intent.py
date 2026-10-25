@@ -68,19 +68,55 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value)).casefold()
 
 
-def in_current_source_scope(question: str) -> bool:
-    """Narrow paid-call allowlist; NOT proof of financial/accounting meaning."""
+# Server-owned source-selection labels, never model-selected source identities.
+REVENUE = "CONSOLIDATED_REVENUE"
+DRUG_SALES_SHARE = "INNOVATIVE_SHARE_OF_DRUG_SALES"
+
+
+def supported_question_kind(question: str) -> str | None:
+    """Conservative, paid-call prefilter; not a semantic qualification."""
     if not isinstance(question, str) or len(question) > 240:
-        return False
+        return None
     if len(question.encode("utf-8")) > 800:
-        return False
+        return None
     q = _compact(question)
     issuer = any(x in q for x in ("恒瑞医药", "600276", "hengrui"))
     period = (bool(re.search(r"2026.{0,6}(?:上半年|半年度|h1)", q))
               or "firsthalfof2026" in q)
-    consolidated = "合并" in q or "consolidated" in q
-    revenue = any(x in q for x in ("营业收入", "营收", "revenue"))
-    return issuer and period and consolidated and revenue
+    if not (issuer and period):
+        return None
+    if any(x in q for x in (
+        "买入", "卖出", "仓位", "持仓", "预测", "forecast", "buy", "sell",
+        "同比", "增长", "growth", "利润", "profit", "毛利", "margin",
+        "母公司", "parent",
+    )):
+        return None
+
+    innovative = "创新药" in q or "innovative" in q
+    drugs = "药品销售收入" in q or "drugsales" in q
+    share = any(x in q for x in (
+        "占", "比例", "比重", "share", "percentage", "percent",
+    ))
+    company_scope = any(x in q for x in (
+        "合并", "公司整体", "公司总", "公司全部", "总营业收入", "总营收",
+        "consolidated", "companyrevenue", "totalrevenue", "overallcompany",
+    ))
+    if innovative and drugs and share and not company_scope:
+        return DRUG_SALES_SHARE
+
+    # An innovative-drug question must never route to consolidated revenue.
+    if innovative or drugs or share:
+        return None
+    if company_scope and any(x in q for x in (
+        "营业收入", "营收", "revenue",
+    )):
+        return REVENUE
+    return None
+
+
+def in_current_source_scope(question: str) -> bool:
+    """Compatibility wrapper used by the authenticated FastAPI route."""
+    return supported_question_kind(question) is not None
 
 
 def _withheld(reason: str) -> dict:
@@ -111,6 +147,35 @@ def _fits_single_revenue_lookup(candidate: CompactIntent) -> bool:
     )
 
 
+def _fits_drug_sales_share(candidate: CompactIntent) -> bool:
+    """Require correct explicit numerator AND denominator in model proposal."""
+    if candidate.operation != QuestionOperation.RATIO:
+        return False
+    if not candidate.metric or not candidate.numerator or not candidate.denominator:
+        return False
+    numerator = _compact(candidate.numerator)
+    denominator = _compact(candidate.denominator)
+    metric = _compact(candidate.metric)
+    scope = _compact(candidate.reporting_scope or "")
+    if not any(x in numerator for x in ("创新药", "innovative")):
+        return False
+    if not any(x in denominator for x in (
+        "药品销售收入", "drugsales", "pharmaceuticalsales",
+    )):
+        return False
+    if any(x in denominator + scope for x in (
+        "合并", "母公司", "公司整体", "公司总", "公司全部", "consolidated",
+        "companyrevenue", "totalrevenue", "overallcompany", "parent",
+    )):
+        return False
+    if any(x in metric for x in (
+        "合并营收", "合并营业收入", "公司总营业收入", "companyrevenue",
+        "consolidatedrevenue",
+    )):
+        return False
+    return True
+
+
 def propose(
     question: str,
     *,
@@ -118,7 +183,8 @@ def propose(
     client: httpx.Client | None = None,
 ) -> dict:
     """At most one paid call. All outputs stay unpublished and unverified."""
-    if not in_current_source_scope(question):
+    kind = supported_question_kind(question)
+    if kind is None:
         return _withheld("QUESTION_OUTSIDE_SUPPORTED_SCOPE")
     if not api_key or not api_key.strip():
         return _withheld("MODEL_NOT_CONFIGURED")
@@ -165,7 +231,11 @@ def propose(
             or len(content.encode("utf-8")) > 6000):
             return _withheld("MODEL_CONTENT_INVALID")
         candidate = CompactIntent.model_validate_json(content)
-        if not _fits_single_revenue_lookup(candidate):
+        matches = (
+            _fits_single_revenue_lookup(candidate) if kind == REVENUE
+            else _fits_drug_sales_share(candidate)
+        )
+        if not matches:
             return _withheld("MODEL_INTENT_OUTSIDE_SUPPORTED_SCOPE")
         proposal = QuestionIntentProposal(
             question=question,
@@ -185,6 +255,7 @@ def propose(
         "status": "INTENT_PROPOSAL_READY",
         "model": MODEL,
         "report_key": REPORT_KEY,
+        "answer_kind": kind,
         "proposal": proposal.model_dump(mode="json"),
         "interpretation_status": "UNVERIFIED_PROPOSAL",
         "financial_semantic_review": "NOT_PERFORMED",

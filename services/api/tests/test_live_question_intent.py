@@ -167,3 +167,87 @@ def test_malformed_json_withheld():
         result = intent.propose(QUESTION, api_key="synthetic", client=client)
     assert result["status"] == "WITHHELD"
     assert result["research_publication"] == "BLOCKED"
+
+
+# M120: numerator/denominator distinction is not model-only authority.
+DRUG_SHARE_QUESTION = (
+    "恒瑞医药2026年上半年创新药销售收入占药品销售收入的比例是多少？"
+)
+
+
+@pytest.mark.parametrize("question,expected_kind", [
+    (QUESTION, intent.REVENUE),
+    (DRUG_SHARE_QUESTION, intent.DRUG_SALES_SHARE),
+    ("恒瑞医药2026年上半年创新药占合并营业收入多少？", None),
+    ("恒瑞医药2026年上半年创新药销售占公司整体营业收入比例？", None),
+    ("恒瑞医药2026年上半年创新药占比是多少？", None),
+    ("恒瑞医药2026年上半年药品销售收入是多少？", None),
+    ("买入600276多少仓位？", None),
+])
+def test_financial_question_scope(question, expected_kind):
+    assert intent.supported_question_kind(question) == expected_kind
+
+
+def test_substituted_denominator_never_consumes_provider_budget(
+    client, monkeypatch,
+):
+    enabled(monkeypatch)
+    def never(*args, **kwargs):
+        raise AssertionError("PROVIDER_SHOULD_NOT_BE_CALLED")
+    monkeypatch.setattr(intent, "propose", never)
+    response = post(
+        client, question="恒瑞医药2026年上半年创新药占合并营业收入多少？",
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "WITHHELD"
+    assert main._M119A_INTENT_COUNT == 0
+
+
+def ratio_mock(denominator="药品销售收入", operation="RATIO"):
+    def handler(request):
+        data = json.loads(request.content)
+        assert data["messages"][-1]["content"] == DRUG_SHARE_QUESTION
+        return httpx.Response(200, json={
+            "model": "deepseek-flash",
+            "choices": [{"finish_reason": "stop", "message": {
+                "content": json.dumps({
+                    "operation": operation,
+                    "metric": "创新药销售收入占药品销售收入比例",
+                    "numerator": "创新药销售收入",
+                    "denominator": denominator,
+                    "reporting_scope": None,
+                    "unresolved": [],
+                }, ensure_ascii=False),
+            }}],
+        })
+    return httpx.MockTransport(handler)
+
+
+def test_verified_ratio_intent_remains_unpublished():
+    with httpx.Client(
+        transport=ratio_mock(), trust_env=False,
+    ) as client:
+        result = intent.propose(
+            DRUG_SHARE_QUESTION, api_key="synthetic", client=client,
+        )
+    assert result["status"] == "INTENT_PROPOSAL_READY"
+    assert result["answer_kind"] == intent.DRUG_SALES_SHARE
+    assert result["proposal"]["denominator_candidate"] == "药品销售收入"
+    assert result["research_publication"] == "BLOCKED"
+    assert result["financial_semantic_review"] == "NOT_PERFORMED"
+
+
+@pytest.mark.parametrize("denominator,operation", [
+    ("合并营业收入", "RATIO"),
+    ("公司整体营业收入", "RATIO"),
+    ("药品销售收入", "LOOKUP"),
+])
+def test_unqualified_ratio_model_proposals_withheld(denominator, operation):
+    with httpx.Client(
+        transport=ratio_mock(denominator, operation), trust_env=False,
+    ) as client:
+        result = intent.propose(
+            DRUG_SHARE_QUESTION, api_key="synthetic", client=client,
+        )
+    assert result["status"] == "WITHHELD"
+    assert result["research_publication"] == "BLOCKED"

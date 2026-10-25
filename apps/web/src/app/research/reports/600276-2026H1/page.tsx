@@ -359,6 +359,7 @@ function OriginalLink({ page }: { page: number }) {
 export default function HengruiSourceReport() {
   const [report, setReport] = useState<ReportPacket | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reportRequested, setReportRequested] = useState(false);
   const [error, setError] = useState("");
   const [candidate, setCandidate] = useState("");
   const [reviewPacket, setReviewPacket] =
@@ -372,6 +373,7 @@ export default function HengruiSourceReport() {
     setReviewPacket(null);
     setReviewError("");
     setCandidate("");
+    setReportRequested(true);
     setLoading(true);
     setReport(null);
     setError("");
@@ -499,9 +501,11 @@ export default function HengruiSourceReport() {
           </div>
         </section>
 
+        <LiveQuestionSection />
+
         <div className={styles.toolbar}>
           <div>
-            <strong>从原始公告生成研究预览</strong>
+            <strong>查看完整原始证据包（可选）</strong>
             <p>
               重新校验本地原始PDF、文件哈希及证据关联。
               不调用付费模型，不保存或发布研究报告。
@@ -514,11 +518,9 @@ export default function HengruiSourceReport() {
             onClick={loadReport}
             disabled={loading || reviewBusy}
           >
-            {loading ? "正在核验原始公告…" : "生成研究预览"}
+            {loading ? "正在核验原始公告…" : "展开完整证据报告"}
           </button>
         </div>
-
-        <LiveQuestionSection />
 
         {error && (
           <div className={styles.error} role="alert">
@@ -528,7 +530,7 @@ export default function HengruiSourceReport() {
           </div>
         )}
 
-        {!report && !error && (
+        {reportRequested && !report && !error && (
           <section className={styles.empty} aria-live="polite">
             <h2>
               {loading
@@ -1192,41 +1194,86 @@ export default function HengruiSourceReport() {
   );
 }
 
-// M119B: one local, explicitly paid intent call followed by independently
-// reverified source evidence. Never displays model-authored financial facts.
-const DEFAULT_QUESTION = "恒瑞医药2026年上半年合并营业收入是多少？";
-const UNSUPPORTED_QUESTION =
-  /创新药|药品销售|母公司|同比|增长|毛利|净利|净利润|占比|比率|比例|趋势|预测|forecast|growth|profit|margin|share|buy|sell|持仓|买入|卖出/iu;
+// M120: two bounded research questions with distinct evidence semantics.
+type ResearchKind = "CONSOLIDATED_REVENUE" | "INNOVATIVE_SHARE_OF_DRUG_SALES";
 
-function verifiedRevenueIntent(value: unknown, question: string): boolean {
+const DEFAULT_QUESTION = "恒瑞医药2026年上半年合并营业收入是多少？";
+const SHARE_QUESTION =
+  "恒瑞医药2026年上半年创新药销售收入占药品销售收入的比例是多少？";
+
+function classifyQuestion(question: string): ResearchKind | null {
+  if (question.length > 240 || new TextEncoder().encode(question).length > 800) {
+    return null;
+  }
+  const q = question.normalize("NFKC").toLowerCase().replace(/\s/g, "");
+  const issuer = /恒瑞医药|600276|hengrui/u.test(q);
+  const period = /2026.{0,6}(上半年|半年度|h1)|firsthalfof2026/u.test(q);
+  if (!issuer || !period) return null;
+  if (/买入|卖出|仓位|持仓|预测|forecast|buy|sell|同比|增长|growth|利润|profit|毛利|margin|母公司|parent/iu.test(q)) {
+    return null;
+  }
+  const innovative = /创新药|innovative/iu.test(q);
+  const drugSales = /药品销售收入|drugsales/iu.test(q);
+  const share = /占|比例|比重|share|percentage|percent/iu.test(q);
+  const company = /合并|公司整体|公司总|公司全部|总营业收入|总营收|consolidated|companyrevenue|totalrevenue|overallcompany/iu.test(q);
+  if (innovative && drugSales && share && !company) {
+    return "INNOVATIVE_SHARE_OF_DRUG_SALES";
+  }
+  if (innovative || drugSales || share) return null;
+  if (company && /营业收入|营收|revenue/iu.test(q)) {
+    return "CONSOLIDATED_REVENUE";
+  }
+  return null;
+}
+
+function verifiedQuestionIntent(
+  value: unknown,
+  question: string,
+  kind: ResearchKind,
+): boolean {
   if (!record(value)) return false;
   const p = value.proposal;
   if (!record(p)) return false;
   const metric = p.metric_candidate;
   const scope = p.reporting_scope_candidate;
+  if (
+    value.status !== "INTENT_PROPOSAL_READY" ||
+    value.model !== "deepseek-flash" ||
+    value.report_key !== REPORT_KEY ||
+    value.answer_kind !== kind ||
+    value.interpretation_status !== "UNVERIFIED_PROPOSAL" ||
+    value.financial_semantic_review !== "NOT_PERFORMED" ||
+    value.research_publication !== "BLOCKED" ||
+    p.question !== question ||
+    typeof p.question_sha256 !== "string" ||
+    !HASH.test(p.question_sha256) ||
+    p.interpretation_status !== "UNVERIFIED_PROPOSAL" ||
+    p.financial_semantic_review !== "NOT_PERFORMED" ||
+    p.research_publication !== "BLOCKED" ||
+    typeof metric !== "string"
+  ) return false;
+  if (kind === "CONSOLIDATED_REVENUE") {
+    return (
+      p.operation_candidate === "LOOKUP" &&
+      p.numerator_candidate === null &&
+      p.denominator_candidate === null &&
+      /营业收入|营收|revenue/iu.test(metric) &&
+      !/创新药|药品销售|母公司|parent/iu.test(metric) &&
+      typeof scope === "string" &&
+      /合并|consolidated/iu.test(scope)
+    );
+  }
+  const numerator = p.numerator_candidate;
+  const denominator = p.denominator_candidate;
   return (
-    value.status === "INTENT_PROPOSAL_READY" &&
-    value.model === "deepseek-flash" &&
-    value.report_key === REPORT_KEY &&
-    value.interpretation_status === "UNVERIFIED_PROPOSAL" &&
-    value.financial_semantic_review === "NOT_PERFORMED" &&
-    value.research_publication === "BLOCKED" &&
-    p.question === question &&
-    typeof p.question_sha256 === "string" &&
-    HASH.test(p.question_sha256) &&
-    p.operation_candidate === "LOOKUP" &&
-    p.numerator_candidate === null &&
-    p.denominator_candidate === null &&
-    p.interpretation_status === "UNVERIFIED_PROPOSAL" &&
-    p.financial_semantic_review === "NOT_PERFORMED" &&
-    p.research_publication === "BLOCKED" &&
-    typeof metric === "string" &&
-    /营业收入|营收|revenue/iu.test(metric) &&
-    !UNSUPPORTED_QUESTION.test(metric) &&
-    typeof scope === "string" &&
-    /合并|consolidated/iu.test(scope) &&
-    !UNSUPPORTED_QUESTION.test(scope) &&
-    !UNSUPPORTED_QUESTION.test(question)
+    p.operation_candidate === "RATIO" &&
+    typeof numerator === "string" &&
+    /创新药|innovative/iu.test(numerator) &&
+    typeof denominator === "string" &&
+    /药品销售收入|drug\s*sales|pharmaceutical\s*sales/iu.test(denominator) &&
+    !/合并|公司整体|公司总|公司全部|consolidated|companyrevenue|totalrevenue|parent/iu.test(denominator) &&
+    !(typeof scope === "string" &&
+      /合并|母公司|公司整体|公司总|公司全部|consolidated|companyrevenue|totalrevenue|parent/iu.test(scope))
   );
 }
 
@@ -1236,15 +1283,26 @@ function LiveQuestionSection() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{
     question: string;
+    kind: ResearchKind;
     source: ReportPacket;
   } | null>(null);
+
+  function selectExample(example: string) {
+    if (busy) return;
+    setQuestion(example);
+    setResult(null);
+    setError("");
+  }
 
   async function askQuestion() {
     const submitted = question.trim();
     if (busy || !submitted || submitted.length > 240) return;
-    if (UNSUPPORTED_QUESTION.test(submitted)) {
+    const kind = classifyQuestion(submitted);
+    if (!kind) {
       setResult(null);
-      setError("当前只支持合并营业收入的原始数值查询；未调用付费模型。");
+      setError(
+        "目前仅支持合并营业收入查询，或创新药销售收入占药品销售收入的管理层披露查询；未调用付费模型。",
+      );
       return;
     }
     setBusy(true);
@@ -1252,8 +1310,7 @@ function LiveQuestionSection() {
     setResult(null);
 
     try {
-      // This is the ONLY paid request. An unsupported or unqualified
-      // interpretation never triggers the subsequent source request.
+      // A paid interpretation is independent from the subsequent source verification.
       const intentResponse = await fetch("/api/local-question-intent", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1262,7 +1319,7 @@ function LiveQuestionSection() {
       });
       if (!intentResponse.ok) throw new Error("INTENT_UNAVAILABLE");
       const intent: unknown = await intentResponse.json();
-      if (!verifiedRevenueIntent(intent, submitted)) {
+      if (!verifiedQuestionIntent(intent, submitted, kind)) {
         throw new Error("INTENT_NOT_QUALIFIED");
       }
 
@@ -1275,7 +1332,11 @@ function LiveQuestionSection() {
       if (!sourceResponse.ok) throw new Error("SOURCE_UNAVAILABLE");
       const source: unknown = await sourceResponse.json();
       if (!verifiedReport(source)) throw new Error("SOURCE_NOT_QUALIFIED");
-      setResult({ question: submitted, source });
+      if (kind === "INNOVATIVE_SHARE_OF_DRUG_SALES" &&
+        !/占药品销售收入的比重达\d+(?:\.\d+)?%/u.test(source.management_statement.text)) {
+        throw new Error("SHARE_SOURCE_MISSING");
+      }
+      setResult({ question: submitted, kind, source });
     } catch {
       setError(
         "问题解释或原始PDF证据核验未通过。未生成财务结论；" +
@@ -1287,16 +1348,28 @@ function LiveQuestionSection() {
   }
 
   const observation = result?.source.observations[0];
+  const management = result?.source.management_statement;
+  const disclosedShare = management?.text.match(
+    /占药品销售收入的比重达(\d+(?:\.\d+)?)%/u,
+  );
 
   return (
     <section className={styles.qaPanel} aria-label="DeepSeek原始披露问答">
-      <p className={styles.kicker}>M119 · 限定问题研究 / 本地实验</p>
+      <p className={styles.kicker}>限定问题研究 / 本地实验</p>
       <h2>向恒瑞医药半年度公告提问</h2>
       <p className={styles.qaHelp}>
-        目前仅处理2026H1合并营业收入的原始披露定位。
-        点击下方按钮会调用一次按量计费的DeepSeek API；
-        原始PDF由研究后端独立校验，不发送给模型。
+        当前支持两种来源定位：合并营业收入，以及管理层披露的
+        创新药销售收入占药品销售收入比例。每次提交可能产生一次
+        DeepSeek API费用；原始PDF不发送给模型。
       </p>
+      <div className={styles.qaExamples} aria-label="示例研究问题">
+        <button type="button" disabled={busy} onClick={() => selectExample(DEFAULT_QUESTION)}>
+          合并营业收入
+        </button>
+        <button type="button" disabled={busy} onClick={() => selectExample(SHARE_QUESTION)}>
+          创新药占药品销售收入
+        </button>
+      </div>
       <form className={styles.qaForm} onSubmit={(event) => {
         event.preventDefault();
         void askQuestion();
@@ -1321,32 +1394,53 @@ function LiveQuestionSection() {
       </form>
       {error && (
         <div className={styles.error} role="alert">
-          <strong>本次研究内容已暂缓展示</strong>
+          <strong>本次研究内容未能展示</strong>
           <p>{error}</p>
         </div>
       )}
-      {result && observation && (
+      {result && (
         <article className={styles.qaResult} aria-live="polite">
           <p className={styles.smallTag}>
-            模型识别：LOOKUP（未经独立财务语义认定）
+            模型识别：{result.kind === "CONSOLIDATED_REVENUE" ? "LOOKUP" : "RATIO"}
+            （未经独立财务语义认定）
           </p>
           <p><strong>所提问题：</strong>{result.question}</p>
-          <h3>原始公告找到的合并利润表营业收入行</h3>
-          <p className={styles.answerValue}>{observation.value_verbatim}</p>
-          <p>
-            来源：《{observation.statement_title}》 ·
-            “{observation.row_label}” ·
-            “{observation.column_header}” · 人民币元。
-          </p>
-          <OriginalLink page={observation.page} />
-          <p className={styles.qaHelp}>
-            该数值来自重新核验的原始PDF单元格，并非模型生成。
-            模型对报告是否已披露的猜测不构成事实；公告日期为2026年8月20日。
-            目前只核验原文位置与字面数值，未完成独立财务语义核验。
-          </p>
-          <p className={styles.hash}>证据ID：{observation.evidence_id}</p>
+          {result.kind === "CONSOLIDATED_REVENUE" && observation && (
+            <>
+              <h3>原始公告找到的合并利润表营业收入行</h3>
+              <p className={styles.answerValue}>{observation.value_verbatim}</p>
+              <p>
+                来源：《{observation.statement_title}》 ·
+                “{observation.row_label}” ·
+                “{observation.column_header}” · 人民币元。
+              </p>
+              <OriginalLink page={observation.page} />
+              <p className={styles.qaHelp}>
+                该数值来自重新核验的原始PDF单元格，并非模型生成。
+                公告日期为2026年8月20日；模型对披露时间的猜测不能作为事实。
+                仅核验原文位置与字面数值。
+              </p>
+              <p className={styles.hash}>证据ID：{observation.evidence_id}</p>
+            </>
+          )}
+          {result.kind === "INNOVATIVE_SHARE_OF_DRUG_SALES" && management && disclosedShare && (
+            <>
+              <h3>管理层披露的创新药销售收入占比</h3>
+              <p className={styles.answerValue}>{disclosedShare[1]}%</p>
+              <p>原文明确使用“药品销售收入”作为分母，不是公司合并营业收入占比。</p>
+              <blockquote className={styles.answerPassage}>
+                {management.text}
+              </blockquote>
+              <OriginalLink page={management.page} />
+              <p className={styles.qaHelp}>
+                这是对管理层原文的来源归属与字面定位，不是独立计算得出的财务比率，
+                也未核验该管理层口径与合并利润表是否可比。
+              </p>
+              <p className={styles.hash}>证据ID：{management.evidence_id}</p>
+            </>
+          )}
           <p className={styles.hash}>报告身份：{result.source.report_identity}</p>
-          <p><strong>研究发布：BLOCKED · 报告未持久化</strong></p>
+          <p><strong>财务语义：NOT_PERFORMED · 研究发布：BLOCKED · 报告未持久化</strong></p>
         </article>
       )}
     </section>
