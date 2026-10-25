@@ -61,7 +61,7 @@
     {
       "id": "V01",
       "family": "verification_not_lookup",
-      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入比例确实为63.16%吗？",
+      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入比例确实是公告披露的比例吗？",
       "expected_kind": null
     },
     {
