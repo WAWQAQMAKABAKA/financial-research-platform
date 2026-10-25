@@ -1,0 +1,104 @@
+{
+  "schema_version": "frp-question-scope-diagnostic-v1",
+  "corpus_type": "AUTHOR_DESIGNED_OFFLINE_DEVELOPMENT",
+  "runtime_import_prohibited": true,
+  "description": "Routing eligibility, not model question understanding or financial-answer ground truth. All examples are author-designed and contain no PDF evidence.",
+  "cases": [
+    {
+      "id": "S01",
+      "family": "single_supported",
+      "question": "恒瑞医药2026年上半年合并营业收入是多少？",
+      "expected_kind": "CONSOLIDATED_REVENUE"
+    },
+    {
+      "id": "S02",
+      "family": "single_supported",
+      "question": "What is Hengrui consolidated revenue for the first half of 2026?",
+      "expected_kind": "CONSOLIDATED_REVENUE"
+    },
+    {
+      "id": "S03",
+      "family": "single_supported",
+      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入的比例是多少？",
+      "expected_kind": "INNOVATIVE_SHARE_OF_DRUG_SALES"
+    },
+    {
+      "id": "S04",
+      "family": "single_supported",
+      "question": "600276 2026H1创新药销售收入占药品销售收入的比重？",
+      "expected_kind": "INNOVATIVE_SHARE_OF_DRUG_SALES"
+    },
+    {
+      "id": "M01",
+      "family": "multi_intent",
+      "question": "恒瑞医药2026年上半年合并营业收入和研发费用分别是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "M02",
+      "family": "multi_intent",
+      "question": "恒瑞医药2026年上半年合并营业收入是多少，以及经营现金流是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "M03",
+      "family": "multi_intent",
+      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入的比例，与2025H1相比变化多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "M04",
+      "family": "multi_intent",
+      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入比例以及其他业务收入分别是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "M05",
+      "family": "multi_intent",
+      "question": "恒瑞医药2026H1合并营业收入是多少，2025H1又是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "V01",
+      "family": "verification_not_lookup",
+      "question": "恒瑞医药2026年上半年创新药销售收入占药品销售收入比例确实为63.16%吗？",
+      "expected_kind": null
+    },
+    {
+      "id": "V02",
+      "family": "verification_not_lookup",
+      "question": "恒瑞医药2026年上半年合并营业收入的数字可靠吗？",
+      "expected_kind": null
+    },
+    {
+      "id": "D01",
+      "family": "scope_mismatch",
+      "question": "恒瑞医药2026年上半年创新药收入占合并营业收入的比例？",
+      "expected_kind": null
+    },
+    {
+      "id": "D02",
+      "family": "scope_mismatch",
+      "question": "恒瑞医药2026H1母公司营业收入是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "U01",
+      "family": "incomplete_context",
+      "question": "恒瑞创新药占比是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "U02",
+      "family": "incomplete_context",
+      "question": "2026年上半年合并营业收入是多少？",
+      "expected_kind": null
+    },
+    {
+      "id": "X01",
+      "family": "disallowed_action",
+      "question": "恒瑞医药2026H1股票应该买入多少仓位？",
+      "expected_kind": null
+    }
+  ]
+}
