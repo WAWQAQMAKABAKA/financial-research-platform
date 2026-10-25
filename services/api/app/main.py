@@ -377,3 +377,59 @@ def local_source_report(
         raise HTTPException(
             status_code=503, detail="SOURCE_UNAVAILABLE"
         ) from None
+
+
+# M119A: local-only DeepSeek question interpretation. No source publication.
+class LocalQuestionIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    report_key: Literal["600276-2026H1"]
+    question: str = Field(min_length=1, max_length=240)
+
+
+_M119A_INTENT_LIMIT = 4
+_M119A_INTENT_COUNT = 0
+_M119A_INTENT_LOCK = Lock()
+
+
+@app.post("/api/v1/research/local-question-intent")
+def local_question_intent(
+    request: LocalQuestionIntentRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    if os.environ.get("FRP_LOCAL_QUESTION_INTENT_UI") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (
+        len(token) < 32
+        or not x_frp_local_token
+        or not compare_digest(token, x_frp_local_token)
+    ):
+        raise HTTPException(status_code=404, detail="Not available")
+
+    from app.modules.financial_report_analyst import live_question_intent
+
+    # Reject unsupported intent before consuming any paid request budget.
+    if not live_question_intent.in_current_source_scope(request.question):
+        return live_question_intent._withheld(
+            "QUESTION_OUTSIDE_SUPPORTED_SCOPE"
+        )
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="MODEL_NOT_CONFIGURED")
+    if not _M119A_INTENT_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="MODEL_REQUEST_IN_PROGRESS")
+
+    global _M119A_INTENT_COUNT
+    try:
+        if _M119A_INTENT_COUNT >= _M119A_INTENT_LIMIT:
+            raise HTTPException(
+                status_code=429, detail="LOCAL_MODEL_CALL_LIMIT_REACHED"
+            )
+        _M119A_INTENT_COUNT += 1  # Failures cost budget; no retries.
+        return live_question_intent.propose(
+            request.question, api_key=api_key,
+        )
+    finally:
+        _M119A_INTENT_LOCK.release()

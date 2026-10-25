@@ -375,3 +375,16 @@
   .reportNav a{flex:1 1 100%}
   .appendix{padding:15px}
 }
+
+/* M119B: one source-verified, unpublished question-answer experiment. */
+.qaPanel{background:#fff;border:1px solid #d9e6e8;border-radius:14px;padding:27px;margin:22px 0}
+.qaPanel h2{font-size:23px;margin:0 0 10px}
+.qaHelp{color:#5b7882;font-size:12px;line-height:1.85}
+.qaForm{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:18px 0}
+.qaForm label{font-size:12px;font-weight:750;color:#31535e;width:100%}
+.qaForm input{flex:1 1 370px;min-width:0;padding:12px;border:1px solid #a9c4c9;border-radius:8px;font-size:14px}
+.qaForm button{flex:0 0 auto}
+.qaResult{background:#f4f9f9;border:1px solid #dce8ea;border-radius:12px;padding:20px;margin-top:17px;font-size:13px;line-height:1.85}
+.qaResult h3{font-size:17px;color:#254a55}
+.qaResult .answerValue{margin:10px 0}
+@media(max-width:750px){.qaPanel{padding:18px}.qaForm button{width:100%}}

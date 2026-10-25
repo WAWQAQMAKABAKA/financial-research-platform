@@ -518,6 +518,8 @@ export default function HengruiSourceReport() {
           </button>
         </div>
 
+        <LiveQuestionSection />
+
         {error && (
           <div className={styles.error} role="alert">
             <strong>报告内容暂不展示</strong>
@@ -1187,5 +1189,166 @@ export default function HengruiSourceReport() {
 
       </div>
     </main>
+  );
+}
+
+// M119B: one local, explicitly paid intent call followed by independently
+// reverified source evidence. Never displays model-authored financial facts.
+const DEFAULT_QUESTION = "恒瑞医药2026年上半年合并营业收入是多少？";
+const UNSUPPORTED_QUESTION =
+  /创新药|药品销售|母公司|同比|增长|毛利|净利|净利润|占比|比率|比例|趋势|预测|forecast|growth|profit|margin|share|buy|sell|持仓|买入|卖出/iu;
+
+function verifiedRevenueIntent(value: unknown, question: string): boolean {
+  if (!record(value)) return false;
+  const p = value.proposal;
+  if (!record(p)) return false;
+  const metric = p.metric_candidate;
+  const scope = p.reporting_scope_candidate;
+  return (
+    value.status === "INTENT_PROPOSAL_READY" &&
+    value.model === "deepseek-flash" &&
+    value.report_key === REPORT_KEY &&
+    value.interpretation_status === "UNVERIFIED_PROPOSAL" &&
+    value.financial_semantic_review === "NOT_PERFORMED" &&
+    value.research_publication === "BLOCKED" &&
+    p.question === question &&
+    typeof p.question_sha256 === "string" &&
+    HASH.test(p.question_sha256) &&
+    p.operation_candidate === "LOOKUP" &&
+    p.numerator_candidate === null &&
+    p.denominator_candidate === null &&
+    p.interpretation_status === "UNVERIFIED_PROPOSAL" &&
+    p.financial_semantic_review === "NOT_PERFORMED" &&
+    p.research_publication === "BLOCKED" &&
+    typeof metric === "string" &&
+    /营业收入|营收|revenue/iu.test(metric) &&
+    !UNSUPPORTED_QUESTION.test(metric) &&
+    typeof scope === "string" &&
+    /合并|consolidated/iu.test(scope) &&
+    !UNSUPPORTED_QUESTION.test(scope) &&
+    !UNSUPPORTED_QUESTION.test(question)
+  );
+}
+
+function LiveQuestionSection() {
+  const [question, setQuestion] = useState(DEFAULT_QUESTION);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<{
+    question: string;
+    source: ReportPacket;
+  } | null>(null);
+
+  async function askQuestion() {
+    const submitted = question.trim();
+    if (busy || !submitted || submitted.length > 240) return;
+    if (UNSUPPORTED_QUESTION.test(submitted)) {
+      setResult(null);
+      setError("当前只支持合并营业收入的原始数值查询；未调用付费模型。");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setResult(null);
+
+    try {
+      // This is the ONLY paid request. An unsupported or unqualified
+      // interpretation never triggers the subsequent source request.
+      const intentResponse = await fetch("/api/local-question-intent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ report_key: REPORT_KEY, question: submitted }),
+        cache: "no-store",
+      });
+      if (!intentResponse.ok) throw new Error("INTENT_UNAVAILABLE");
+      const intent: unknown = await intentResponse.json();
+      if (!verifiedRevenueIntent(intent, submitted)) {
+        throw new Error("INTENT_NOT_QUALIFIED");
+      }
+
+      const sourceResponse = await fetch("/api/local-source-report", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ report_key: REPORT_KEY }),
+        cache: "no-store",
+      });
+      if (!sourceResponse.ok) throw new Error("SOURCE_UNAVAILABLE");
+      const source: unknown = await sourceResponse.json();
+      if (!verifiedReport(source)) throw new Error("SOURCE_NOT_QUALIFIED");
+      setResult({ question: submitted, source });
+    } catch {
+      setError(
+        "问题解释或原始PDF证据核验未通过。未生成财务结论；" +
+        "研究发布仍被阻止。",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const observation = result?.source.observations[0];
+
+  return (
+    <section className={styles.qaPanel} aria-label="DeepSeek原始披露问答">
+      <p className={styles.kicker}>M119 · 限定问题研究 / 本地实验</p>
+      <h2>向恒瑞医药半年度公告提问</h2>
+      <p className={styles.qaHelp}>
+        目前仅处理2026H1合并营业收入的原始披露定位。
+        点击下方按钮会调用一次按量计费的DeepSeek API；
+        原始PDF由研究后端独立校验，不发送给模型。
+      </p>
+      <form className={styles.qaForm} onSubmit={(event) => {
+        event.preventDefault();
+        void askQuestion();
+      }}>
+        <label htmlFor="m119-financial-question">研究问题</label>
+        <input
+          id="m119-financial-question"
+          type="text"
+          required
+          maxLength={240}
+          value={question}
+          disabled={busy}
+          onChange={(event) => {
+            setQuestion(event.target.value);
+            setResult(null);
+            setError("");
+          }}
+        />
+        <button className={styles.button} type="submit" disabled={busy || !question.trim()}>
+          {busy ? "正在核对问题与来源…" : "调用DeepSeek并核验原始PDF（计费）"}
+        </button>
+      </form>
+      {error && (
+        <div className={styles.error} role="alert">
+          <strong>本次研究内容已暂缓展示</strong>
+          <p>{error}</p>
+        </div>
+      )}
+      {result && observation && (
+        <article className={styles.qaResult} aria-live="polite">
+          <p className={styles.smallTag}>
+            模型识别：LOOKUP（未经独立财务语义认定）
+          </p>
+          <p><strong>所提问题：</strong>{result.question}</p>
+          <h3>原始公告找到的合并利润表营业收入行</h3>
+          <p className={styles.answerValue}>{observation.value_verbatim}</p>
+          <p>
+            来源：《{observation.statement_title}》 ·
+            “{observation.row_label}” ·
+            “{observation.column_header}” · 人民币元。
+          </p>
+          <OriginalLink page={observation.page} />
+          <p className={styles.qaHelp}>
+            该数值来自重新核验的原始PDF单元格，并非模型生成。
+            模型对报告是否已披露的猜测不构成事实；公告日期为2026年8月20日。
+            目前只核验原文位置与字面数值，未完成独立财务语义核验。
+          </p>
+          <p className={styles.hash}>证据ID：{observation.evidence_id}</p>
+          <p className={styles.hash}>报告身份：{result.source.report_identity}</p>
+          <p><strong>研究发布：BLOCKED · 报告未持久化</strong></p>
+        </article>
+      )}
+    </section>
   );
 }
