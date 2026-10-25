@@ -1,0 +1,408 @@
+{
+  "schema_version": "frp-question-understanding-v1",
+  "corpus_type": "OFFLINE_DEVELOPMENT_NOT_PROTECTED_GT",
+  "description": "Question interpretation development examples. Not financial answer ground truth, retrieval ground truth, or independent real-document qualification.",
+  "runtime_import_prohibited": true,
+  "cases": [
+    {
+      "id": "Q01",
+      "family": "direct_disclosure",
+      "question": "恒瑞医药2026年上半年合并营业收入是多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q02",
+      "family": "direct_disclosure",
+      "question": "600276 半年报合并利润表的营收数字是多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q03",
+      "family": "direct_disclosure",
+      "question": "What is Hengrui consolidated revenue for the first half of 2026?",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q04",
+      "family": "direct_disclosure",
+      "question": "母公司利润表上的营业收入是多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q05",
+      "family": "direct_disclosure",
+      "question": "合并和母公司营业收入分别是多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q06",
+      "family": "direct_disclosure",
+      "question": "2026h1报告第198页分部营业收入和营业成本两行写了什么？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q07",
+      "family": "direct_disclosure",
+      "question": "What do the revenue and cost rows in the 2026H1 segment table say?",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q08",
+      "family": "direct_disclosure",
+      "question": "中航沈飞上半年分部报告列了哪些收入成本数字？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q09",
+      "family": "management_disclosure",
+      "question": "创新药上半年销售收入是多少亿元？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q10",
+      "family": "management_disclosure",
+      "question": "恒瑞创新药2026H1同比增长多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q11",
+      "family": "management_disclosure",
+      "question": "创新药收入占药品销售收入比例有多高？",
+      "reference_intent": {
+        "operation": "RATIO",
+        "denominator": "drug_sales_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q12",
+      "family": "management_disclosure",
+      "question": "Does the half-year report state what percentage of drug sales came from innovative medicines?",
+      "reference_intent": {
+        "operation": "RATIO",
+        "denominator": "drug_sales_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q13",
+      "family": "management_disclosure",
+      "question": "创新药卖了多少，管理层怎么表述的？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q14",
+      "family": "management_disclosure",
+      "question": "管理层有没有披露创新药销售同比增幅？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q15",
+      "family": "denominator_semantics",
+      "question": "创新药占公司整体营业收入多少？",
+      "reference_intent": {
+        "operation": "RATIO",
+        "denominator": "overall_company_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q16",
+      "family": "denominator_semantics",
+      "question": "63.16% 是占合并营收的比例吗？",
+      "reference_intent": {
+        "operation": "VERIFY",
+        "denominator": "consolidated_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q17",
+      "family": "denominator_semantics",
+      "question": "Is 63.16% the share of all company revenue?",
+      "reference_intent": {
+        "operation": "VERIFY",
+        "denominator": "overall_company_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q18",
+      "family": "denominator_semantics",
+      "question": "用88.09亿元除以154.56亿元，就能算创新药营收占比了吗？",
+      "reference_intent": {
+        "operation": "VERIFY",
+        "denominator": "consolidated_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q19",
+      "family": "denominator_semantics",
+      "question": "合并营业收入与药品销售收入是同一个口径吗？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": "drug_sales_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q20",
+      "family": "denominator_semantics",
+      "question": "创新药销售比重与创新药收入占总营收比重的区别是什么？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": "multiple"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q21",
+      "family": "denominator_semantics",
+      "question": "公司药品销售额是否等于公司全部营业收入？",
+      "reference_intent": {
+        "operation": "VERIFY",
+        "denominator": "overall_company_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q22",
+      "family": "denominator_semantics",
+      "question": "把母公司收入作为创新药的占比基数合理吗？",
+      "reference_intent": {
+        "operation": "VERIFY",
+        "denominator": "parent_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q23",
+      "family": "comparison",
+      "question": "2026H1合并营业收入比2025H1增长了多少？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q24",
+      "family": "comparison",
+      "question": "合并收入比母公司收入高多少？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q25",
+      "family": "comparison",
+      "question": "创新药销售收入占比比去年提升了吗？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": "drug_sales_revenue"
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q26",
+      "family": "comparison",
+      "question": "How has innovative-drug sales growth changed from the prior half year?",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q27",
+      "family": "comparison",
+      "question": "中航沈飞2026H1分部营业成本较去年同期变化多少？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q28",
+      "family": "causal_explanation",
+      "question": "创新药增长是不是导致公司总营收上升？",
+      "reference_intent": {
+        "operation": "EXPLAIN",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q29",
+      "family": "causal_explanation",
+      "question": "研发投入增长是否直接带动创新药销售？",
+      "reference_intent": {
+        "operation": "EXPLAIN",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q30",
+      "family": "causal_explanation",
+      "question": "为什么公司这半年净利润变化这么大？",
+      "reference_intent": {
+        "operation": "EXPLAIN",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q31",
+      "family": "causal_explanation",
+      "question": "Does management attribute revenue changes to new drug launches?",
+      "reference_intent": {
+        "operation": "EXPLAIN",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q32",
+      "family": "source_navigation",
+      "question": "合并利润表营业收入的原文在哪一页？",
+      "reference_intent": {
+        "operation": "LOCATE_SOURCE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q33",
+      "family": "source_navigation",
+      "question": "创新药销售收入这一句话的公告来源是什么？",
+      "reference_intent": {
+        "operation": "LOCATE_SOURCE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q34",
+      "family": "source_navigation",
+      "question": "Where is the parent-company revenue shown in the filing?",
+      "reference_intent": {
+        "operation": "LOCATE_SOURCE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q35",
+      "family": "ambiguity",
+      "question": "创新药占比是多少？",
+      "reference_intent": {
+        "operation": "RATIO",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q36",
+      "family": "ambiguity",
+      "question": "公司收入是多少？",
+      "reference_intent": {
+        "operation": "LOOKUP",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q37",
+      "family": "ambiguity",
+      "question": "同比涨了吗？",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q38",
+      "family": "ambiguity",
+      "question": "Is the percentage improving?",
+      "reference_intent": {
+        "operation": "COMPARE",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q39",
+      "family": "out_of_scope",
+      "question": "2027年恒瑞创新药收入一定会超过多少？",
+      "reference_intent": {
+        "operation": "FORECAST",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    },
+    {
+      "id": "Q40",
+      "family": "out_of_scope",
+      "question": "恒瑞医药股票今天应该买入多少仓位？",
+      "reference_intent": {
+        "operation": "TRADE_ACTION",
+        "denominator": null
+      },
+      "reference_type": "AUTHOR_DESIGNED_DEVELOPMENT"
+    }
+  ]
+}
