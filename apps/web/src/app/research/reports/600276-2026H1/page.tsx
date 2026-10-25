@@ -41,6 +41,28 @@ type ManagementStatement = {
   review_scope: string;
 };
 
+type RoutedEvidence = {
+  status: string;
+  answer_kind: ResearchKind;
+  evidence_kind: string;
+  claim_id: string;
+  evidence_id: string;
+  source_page: number;
+  source_excerpt: string;
+  value_verbatim: string;
+  denominator_label: string | null;
+  review_scope: string;
+  report_key: string;
+  source_report_identity: string;
+  document_id: string;
+  source_url: string;
+  source_sha256: string;
+  canonical_sha256: string;
+  routing_review_scope: string;
+  financial_semantic_review: string;
+  research_publication: string;
+};
+
 type ReportPacket = {
   status: string;
   report_type: string;
@@ -67,6 +89,7 @@ type ReportPacket = {
   financial_semantic_review: string;
   research_publication: string;
   limitations: string[];
+  routed_evidence?: RoutedEvidence;
 };
 
 
@@ -273,6 +296,66 @@ function verifiedReport(v: unknown): v is ReportPacket {
   );
 }
 
+// M121: an evidence route must bind to the independently verified PDF packet.
+// Source routing is not an accounting review or permission to publish.
+function verifiedEvidenceRoute(
+  source: ReportPacket,
+  kind: ResearchKind,
+): RoutedEvidence | null {
+  const route = source.routed_evidence;
+  if (!record(route)) return null;
+  if (
+    route.status !== "ROUTED_SOURCE_EVIDENCE_READY" ||
+    route.answer_kind !== kind ||
+    route.report_key !== source.report_key ||
+    route.source_report_identity !== source.report_identity ||
+    route.document_id !== source.document_id ||
+    route.source_url !== source.source_url ||
+    route.source_sha256 !== source.source_sha256 ||
+    route.canonical_sha256 !== source.canonical_sha256 ||
+    route.routing_review_scope !== "SOURCE_BINDING_ONLY" ||
+    route.financial_semantic_review !== "NOT_PERFORMED" ||
+    route.research_publication !== "BLOCKED" ||
+    typeof route.evidence_id !== "string" ||
+    !HASH.test(route.evidence_id) ||
+    typeof route.source_page !== "number" ||
+    !Number.isInteger(route.source_page) ||
+    route.source_page < 1 ||
+    typeof route.value_verbatim !== "string"
+  ) return null;
+
+  if (kind === "CONSOLIDATED_REVENUE") {
+    const evidence = source.observations.find(
+      (o) => o.evidence_id === route.evidence_id,
+    );
+    return evidence &&
+      route.evidence_kind === "FINANCIAL_STATEMENT_CELL" &&
+      route.claim_id === evidence.claim_id &&
+      route.claim_id === "REV1" &&
+      route.source_page === evidence.page &&
+      route.source_excerpt === evidence.value_verbatim &&
+      route.value_verbatim === evidence.value_verbatim &&
+      route.denominator_label === null &&
+      route.review_scope === evidence.review_scope
+      ? (route as RoutedEvidence) : null;
+  }
+
+  const management = source.management_statement;
+  const match = management.text.match(
+    /占药品销售收入的比重达(\d+(?:\.\d+)?)%/u,
+  );
+  return match &&
+    route.evidence_kind === "ATTRIBUTED_MANAGEMENT_SHARE" &&
+    route.claim_id === management.claim_id &&
+    route.claim_id === "M1" &&
+    route.evidence_id === management.evidence_id &&
+    route.source_page === management.page &&
+    route.source_excerpt === management.text &&
+    route.value_verbatim === `${match[1]}%` &&
+    route.denominator_label === "药品销售收入" &&
+    route.review_scope === management.review_scope
+    ? (route as RoutedEvidence) : null;
+}
 
 function verifiedClaimReview(
   value: unknown,
@@ -1285,6 +1368,7 @@ function LiveQuestionSection() {
     question: string;
     kind: ResearchKind;
     source: ReportPacket;
+    route: RoutedEvidence;
   } | null>(null);
 
   function selectExample(example: string) {
@@ -1326,17 +1410,15 @@ function LiveQuestionSection() {
       const sourceResponse = await fetch("/api/local-source-report", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ report_key: REPORT_KEY }),
+        body: JSON.stringify({ report_key: REPORT_KEY, answer_kind: kind }),
         cache: "no-store",
       });
       if (!sourceResponse.ok) throw new Error("SOURCE_UNAVAILABLE");
       const source: unknown = await sourceResponse.json();
       if (!verifiedReport(source)) throw new Error("SOURCE_NOT_QUALIFIED");
-      if (kind === "INNOVATIVE_SHARE_OF_DRUG_SALES" &&
-        !/占药品销售收入的比重达\d+(?:\.\d+)?%/u.test(source.management_statement.text)) {
-        throw new Error("SHARE_SOURCE_MISSING");
-      }
-      setResult({ question: submitted, kind, source });
+      const route = verifiedEvidenceRoute(source, kind);
+      if (!route) throw new Error("SOURCE_ROUTE_NOT_QUALIFIED");
+      setResult({ question: submitted, kind, source, route });
     } catch {
       setError(
         "问题解释或原始PDF证据核验未通过。未生成财务结论；" +
@@ -1347,11 +1429,11 @@ function LiveQuestionSection() {
     }
   }
 
-  const observation = result?.source.observations[0];
-  const management = result?.source.management_statement;
-  const disclosedShare = management?.text.match(
-    /占药品销售收入的比重达(\d+(?:\.\d+)?)%/u,
+  const route = result?.route;
+  const observation = result?.source.observations.find(
+    (o) => o.evidence_id === route?.evidence_id,
   );
+  const management = result?.source.management_statement;
 
   return (
     <section className={styles.qaPanel} aria-label="DeepSeek原始披露问答">
@@ -1408,37 +1490,40 @@ function LiveQuestionSection() {
           {result.kind === "CONSOLIDATED_REVENUE" && observation && (
             <>
               <h3>原始公告找到的合并利润表营业收入行</h3>
-              <p className={styles.answerValue}>{observation.value_verbatim}</p>
+              <p className={styles.answerValue}>{route?.value_verbatim}</p>
               <p>
                 来源：《{observation.statement_title}》 ·
                 “{observation.row_label}” ·
                 “{observation.column_header}” · 人民币元。
               </p>
-              <OriginalLink page={observation.page} />
+              <OriginalLink page={route?.source_page ?? observation.page} />
               <p className={styles.qaHelp}>
                 该数值来自重新核验的原始PDF单元格，并非模型生成。
                 公告日期为2026年8月20日；模型对披露时间的猜测不能作为事实。
                 仅核验原文位置与字面数值。
               </p>
-              <p className={styles.hash}>证据ID：{observation.evidence_id}</p>
+              <p className={styles.hash}>证据ID：{route?.evidence_id}</p>
             </>
           )}
-          {result.kind === "INNOVATIVE_SHARE_OF_DRUG_SALES" && management && disclosedShare && (
+          {result.kind === "INNOVATIVE_SHARE_OF_DRUG_SALES" && management && route && (
             <>
               <h3>管理层披露的创新药销售收入占比</h3>
-              <p className={styles.answerValue}>{disclosedShare[1]}%</p>
+              <p className={styles.answerValue}>{route.value_verbatim}</p>
               <p>原文明确使用“药品销售收入”作为分母，不是公司合并营业收入占比。</p>
               <blockquote className={styles.answerPassage}>
                 {management.text}
               </blockquote>
-              <OriginalLink page={management.page} />
+              <OriginalLink page={route.source_page} />
               <p className={styles.qaHelp}>
                 这是对管理层原文的来源归属与字面定位，不是独立计算得出的财务比率，
                 也未核验该管理层口径与合并利润表是否可比。
               </p>
-              <p className={styles.hash}>证据ID：{management.evidence_id}</p>
+              <p className={styles.hash}>证据ID：{route.evidence_id}</p>
             </>
           )}
+          <p className={styles.hash}>
+            来源路由：{route?.evidence_kind} · {route?.routing_review_scope}
+          </p>
           <p className={styles.hash}>报告身份：{result.source.report_identity}</p>
           <p><strong>财务语义：NOT_PERFORMED · 研究发布：BLOCKED · 报告未持久化</strong></p>
         </article>

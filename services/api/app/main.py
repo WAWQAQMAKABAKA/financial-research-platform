@@ -330,6 +330,9 @@ def local_analyst_draft_review(
 class LocalSourceReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     report_key: Literal["600276-2026H1"]
+    answer_kind: Literal[
+        "CONSOLIDATED_REVENUE", "INNOVATIVE_SHARE_OF_DRUG_SALES",
+    ] | None = None
 
 
 @app.post("/api/v1/research/local-source-report")
@@ -372,6 +375,11 @@ def local_source_report(
             or result.get("report_storage") != "NOT_PERSISTED"
         ):
             raise ValueError("REPORT_GATE_FAILED")
+        if request.answer_kind is not None:
+            from app.modules.financial_report_analyst.source_evidence_router import (
+                route_evidence,
+            )
+            result["routed_evidence"] = route_evidence(result, request.answer_kind)
         return result
     except Exception:
         raise HTTPException(

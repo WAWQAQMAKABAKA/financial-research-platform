@@ -38,10 +38,15 @@ export async function POST(request: NextRequest) {
   }
 
   const data = payload as Record<string, unknown>;
+  const keys = Object.keys(data).sort().join(",");
+  const hasRoute = keys === "answer_kind,report_key";
 
   if (
-    Object.keys(data).join(",") !== "report_key" ||
-    data.report_key !== "600276-2026H1"
+    (keys !== "report_key" && !hasRoute) ||
+    data.report_key !== "600276-2026H1" ||
+    (hasRoute &&
+      data.answer_kind !== "CONSOLIDATED_REVENUE" &&
+      data.answer_kind !== "INNOVATIVE_SHARE_OF_DRUG_SALES")
   ) {
     return unavailable(400);
   }
