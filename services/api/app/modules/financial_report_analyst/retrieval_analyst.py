@@ -17,7 +17,9 @@ import httpx
 from pydantic import Field, ValidationError
 
 from app.evidence.contracts import SourceDocument, StrictRecord
-from app.modules.financial_report_analyst import canonical_retrieval, deepseek_draft
+from app.modules.financial_report_analyst import (
+    answer_coverage, canonical_retrieval, deepseek_draft,
+)
 
 VERSION = "frp-retrieval-analyst-preview-v1"
 MAX_INPUT_BYTES = 17500
@@ -226,6 +228,15 @@ def draft_from_verified_retrieval(
         claims = _review_model_claims(proposals.claims, evidence)
         draft_id = sha256("|".join((VERSION, source.document_id,
             source.canonical_sha256, packet["retrieval_id"], content)).encode()).hexdigest()
+        # M125: independent, model-free question phrase visibility audit.
+        # This is NOT a relevance or financial-semantic sufficiency verdict.
+        try:
+            coverage_probe = answer_coverage.build_coverage_probe(
+                question=question, retrieval_id=packet["retrieval_id"],
+                draft_id=draft_id, evidence=evidence, claims=claims,
+            )
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return _withheld("COVERAGE_PROBE_UNAVAILABLE", packet, usage)
         return {
             "status": "UNPUBLISHED_ANALYST_PREVIEW", "draft_id": draft_id,
             "draft_version": VERSION, "report_key": packet["report_key"],
@@ -233,7 +244,8 @@ def draft_from_verified_retrieval(
             "document_id": source.document_id, "source_url": source.source_url,
             "source_sha256": source.source_sha256,
             "canonical_sha256": source.canonical_sha256,
-            "claims": claims, "review_scope": "SOURCE_QUOTE_AND_NUMERIC_CHECK_ONLY",
+            "claims": claims, "coverage_probe": coverage_probe,
+            "review_scope": "SOURCE_QUOTE_AND_NUMERIC_CHECK_ONLY",
             "claim_level_review": "UNCERTAIN_SEMANTICS_NOT_REVIEWED",
             "financial_semantic_review": "NOT_PERFORMED",
             "research_publication": "BLOCKED", "report_storage": "NOT_PERSISTED",

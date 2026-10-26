@@ -25,6 +25,26 @@ type PreviewClaim = {
   };
 };
 
+type CoverageFacet = {
+  question_phrase: string;
+  literal_status:
+    | "PHRASE_VISIBLE_IN_SOURCE_AND_DRAFT"
+    | "PHRASE_VISIBLE_IN_SOURCE_ONLY"
+    | "PHRASE_NOT_LOCATED_LEXICALLY";
+  source_evidence_ids: string[];
+  draft_claim_ids: string[];
+};
+
+type CoverageProbe = {
+  coverage_id: string;
+  coverage_version: "frp-question-phrase-visibility-v1";
+  basis: "EXACT_NORMALIZED_QUESTION_PHRASES_ONLY";
+  segmentation: "SURFACE_CONJUNCTION_SPLIT" | "FALLBACK_SINGLE_QUESTION_PHRASE";
+  review: "COVERAGE_NOT_SEMANTICALLY_QUALIFIED";
+  facets: CoverageFacet[];
+  limitations: string;
+};
+
 type PreviewPacket = {
   status: "UNPUBLISHED_ANALYST_PREVIEW" | "WITHHELD";
   reason?: string;
@@ -39,6 +59,7 @@ type PreviewPacket = {
   source_sha256: string;
   canonical_sha256: string;
   claims: PreviewClaim[];
+  coverage_probe?: CoverageProbe;
   financial_semantic_review: "NOT_PERFORMED";
   research_publication: "BLOCKED";
   report_storage: "NOT_PERSISTED";
@@ -80,6 +101,41 @@ function validate(
     raw.claim_level_review !== "UNCERTAIN_SEMANTICS_NOT_REVIEWED" ||
     raw.claims.length < 1 || raw.claims.length > 3
   ) return false;
+  if (!record(raw.coverage_probe)) return false;
+  const coverage = raw.coverage_probe;
+  if (
+    typeof coverage.coverage_id !== "string" || !HEX.test(coverage.coverage_id) ||
+    coverage.coverage_version !== "frp-question-phrase-visibility-v1" ||
+    coverage.basis !== "EXACT_NORMALIZED_QUESTION_PHRASES_ONLY" ||
+    !(coverage.segmentation === "SURFACE_CONJUNCTION_SPLIT" ||
+      coverage.segmentation === "FALLBACK_SINGLE_QUESTION_PHRASE") ||
+    coverage.review !== "COVERAGE_NOT_SEMANTICALLY_QUALIFIED" ||
+    typeof coverage.limitations !== "string" || !coverage.limitations.trim() ||
+    !Array.isArray(coverage.facets) || coverage.facets.length < 1 ||
+    coverage.facets.length > 4
+  ) return false;
+  const claimIds = new Set(raw.claims.map((claim: unknown) =>
+    record(claim) ? claim.claim_id : null,
+  ));
+  if (!coverage.facets.every((item: unknown) => {
+    if (!record(item) || typeof item.question_phrase !== "string" ||
+        !item.question_phrase.trim() || item.question_phrase.length > 240 ||
+        !Array.isArray(item.source_evidence_ids) ||
+        !Array.isArray(item.draft_claim_ids) ||
+        item.source_evidence_ids.length > 5 || item.draft_claim_ids.length > 3 ||
+        !item.source_evidence_ids.every((id: unknown) =>
+          typeof id === "string" && evidenceIds.has(id)) ||
+        !item.draft_claim_ids.every((id: unknown) =>
+          typeof id === "string" && claimIds.has(id))
+    ) return false;
+    const sourceCount = item.source_evidence_ids.length;
+    const draftCount = item.draft_claim_ids.length;
+    return (
+      (item.literal_status === "PHRASE_VISIBLE_IN_SOURCE_AND_DRAFT" && draftCount > 0 && sourceCount > 0) ||
+      (item.literal_status === "PHRASE_VISIBLE_IN_SOURCE_ONLY" && sourceCount > 0 && draftCount === 0) ||
+      (item.literal_status === "PHRASE_NOT_LOCATED_LEXICALLY" && sourceCount === 0 && draftCount === 0)
+    );
+  })) return false;
   return raw.claims.every((claim: unknown, index) => {
     if (!record(claim) || !record(claim.review)) return false;
     return claim.claim_id === `C${index + 1}` &&
@@ -134,7 +190,7 @@ export default function AnalystPreviewSection({
 
   return (
     <div className={styles.card} aria-label="检索驱动的研究摘录实验">
-      <p className={styles.smallTag}>M124 · 检索驱动的 Fundamental Analyst 草稿</p>
+      <p className={styles.smallTag}>M125 · 检索驱动研究草稿与覆盖线索</p>
       <h3>基于已检索证据生成研究摘录</h3>
       <p className={styles.qaHelp}>
         可选调用一次 DeepSeek 生成 1–3 条来源归属的研究陈述。
@@ -169,6 +225,31 @@ export default function AnalystPreviewSection({
               </p>
             </article>
           ))}
+          {result.coverage_probe && (
+            <section className={styles.answerBoundary} aria-label="研究问题字面覆盖线索">
+              <h4>提问覆盖线索 · 不是完整性判定</h4>
+              <p className={styles.qaHelp}>
+                自动分解问题中的表面短语，只检查它们是否在已检索原文与草稿引文中逐字出现。
+                无法识别同义词或解释性改写；任何匹配都不等于真正回答了问题。
+              </p>
+              <ul>
+                {result.coverage_probe.facets.map((facet, i) => (
+                  <li key={`${i}-${facet.question_phrase}`}>
+                    <strong>「{facet.question_phrase}」</strong>：{" "}
+                    {facet.literal_status === "PHRASE_VISIBLE_IN_SOURCE_AND_DRAFT"
+                      ? `原文与草稿均出现该词组（${facet.draft_claim_ids.join("、")}）；语义尚未审核。`
+                      : facet.literal_status === "PHRASE_VISIBLE_IN_SOURCE_ONLY"
+                        ? "已检索原文出现该词组，但草稿陈述及引文未同时匹配；可能有遗漏。"
+                        : "当前候选中未逐字找到该词组；同义表达可能存在，不能认定事实缺失。"}
+                  </li>
+                ))}
+              </ul>
+              <p className={styles.qaHelp}>
+                检查范围仅限本次传给 Analyst 的原文候选及本次草稿；
+                检索相关性、问题完整性和财务语义均未获核验。
+              </p>
+            </section>
+          )}
           <p className={styles.challengeCaution}>
             所有陈述仍是未审核的模型草稿；不可视为合格研究报告。
             财务语义：NOT_PERFORMED · 发布：BLOCKED · 未持久化。
