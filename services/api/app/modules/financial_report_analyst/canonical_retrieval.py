@@ -16,6 +16,9 @@ import unicodedata
 
 from app.evidence.contracts import EvidenceSpan, SourceDocument, require_evidence_binding
 from app.evidence.pdf_canonicalizer import CanonicalDocument, canonicalize_pdf
+from app.modules.financial_report_analyst.source_context import (
+    CONTEXT_VERSION, attach_heading_context,
+)
 
 RETRIEVER_VERSION = "frp-canonical-lexical-v1"
 _REPORT_KEY = "600276-2026H1"  # Local report selection; not a question/answer rule.
@@ -132,6 +135,8 @@ def retrieve_from_canonical(
             "review_scope": "VERIFIED_CANONICAL_TEXT_SPAN_ONLY",
         })
 
+    hits, heading_alert = attach_heading_context(document, hits)
+
     run_id = sha256("|".join((
         RETRIEVER_VERSION, source.document_id, source.canonical_sha256,
         as_of.date().isoformat(), question,
@@ -150,6 +155,9 @@ def retrieve_from_canonical(
         "source_sha256": source.source_sha256,
         "canonical_sha256": source.canonical_sha256,
         "evidence": hits,
+        "context_probe_version": CONTEXT_VERSION,
+        "statement_heading_alert": heading_alert,
+        "retrieval_context_review": "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED",
         "retrieval_review": "CANDIDATES_NOT_RELEVANCE_QUALIFIED",
         "financial_semantic_review": "NOT_PERFORMED",
         "research_publication": "BLOCKED",

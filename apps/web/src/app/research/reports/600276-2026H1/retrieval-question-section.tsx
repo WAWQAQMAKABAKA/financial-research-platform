@@ -20,6 +20,13 @@ type Evidence = {
   canonical_end: number;
   source_excerpt: string;
   review_scope: "VERIFIED_CANONICAL_TEXT_SPAN_ONLY";
+  statement_heading_cue: {
+    status: "STANDALONE_HEADING_CANDIDATE" | "UNRESOLVED";
+    heading_verbatim: string | null;
+    heading_page: number | null;
+    heading_start: number | null;
+    heading_end: number | null;
+  };
 };
 
 type Packet = {
@@ -37,6 +44,9 @@ type Packet = {
   canonical_sha256: string;
   evidence: Evidence[];
   retrieval_review: "CANDIDATES_NOT_RELEVANCE_QUALIFIED";
+  context_probe_version: "frp-standalone-statement-heading-cue-v1";
+  statement_heading_alert: "MULTIPLE_STATEMENT_HEADING_CANDIDATES" | "NOT_ASSESSED";
+  retrieval_context_review: "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED";
   financial_semantic_review: "NOT_PERFORMED";
   research_publication: "BLOCKED";
   report_storage: "NOT_PERSISTED";
@@ -67,6 +77,10 @@ function verifiedPacket(
     typeof v.retrieval_id !== "string" || !HEX.test(v.retrieval_id) ||
     typeof v.as_of !== "string" || !Number.isFinite(Date.parse(v.as_of)) ||
     v.retrieval_review !== "CANDIDATES_NOT_RELEVANCE_QUALIFIED" ||
+    v.context_probe_version !== "frp-standalone-statement-heading-cue-v1" ||
+    !(v.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" ||
+      v.statement_heading_alert === "NOT_ASSESSED") ||
+    v.retrieval_context_review !== "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED" ||
     v.financial_semantic_review !== "NOT_PERFORMED" ||
     v.research_publication !== "BLOCKED" ||
     v.report_storage !== "NOT_PERSISTED" ||
@@ -95,8 +109,24 @@ function verifiedPacket(
       e.canonical_end <= e.canonical_start ||
       typeof e.source_excerpt !== "string" ||
       !e.source_excerpt.trim() || e.source_excerpt.length > 1200 ||
-      e.review_scope !== "VERIFIED_CANONICAL_TEXT_SPAN_ONLY"
+      e.review_scope !== "VERIFIED_CANONICAL_TEXT_SPAN_ONLY" ||
+      !isRecord(e.statement_heading_cue)
     ) return false;
+    const cue = e.statement_heading_cue;
+    if (cue.status === "UNRESOLVED") {
+      if (cue.heading_verbatim !== null || cue.heading_page !== null ||
+          cue.heading_start !== null || cue.heading_end !== null) return false;
+    } else if (cue.status === "STANDALONE_HEADING_CANDIDATE") {
+      if (typeof cue.heading_verbatim !== "string" ||
+          cue.heading_verbatim.length === 0 || cue.heading_verbatim.length > 40 ||
+          typeof cue.heading_page !== "number" || !Number.isInteger(cue.heading_page) ||
+          cue.heading_page < 1 || cue.heading_page > e.source_page ||
+          e.source_page - cue.heading_page > 1 ||
+          typeof cue.heading_start !== "number" || !Number.isInteger(cue.heading_start) ||
+          cue.heading_start < 0 ||
+          typeof cue.heading_end !== "number" || !Number.isInteger(cue.heading_end) ||
+          cue.heading_end <= cue.heading_start || cue.heading_end > e.canonical_start) return false;
+    } else return false;
     ids.add(e.evidence_id);
     return true;
   });
@@ -178,9 +208,21 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                 根据原文词项匹配排序，尚未评定是否足以回答问题。只引用原始PDF；
                 财务报表表格的行列含义没有因检索而被验证。
               </p>
+              {packet.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" && (
+                <div className={styles.withheld} role="note">
+                  <strong>检索结果跨越不同财务报表标题候选。</strong>
+                  <p>可能包含合并与母公司等不同报表口径；仅凭数值或词项命中不可混用。
+                    请打开原始PDF核对表头、所属报表和期间。尚未完成财务语义审核。</p>
+                </div>
+              )}
               {packet.evidence.map((hit) => (
                 <article key={hit.evidence_id} className={styles.card}>
                   <p className={styles.smallTag}>原文位置 · PDF 第 {hit.source_page} 页</p>
+                  <p className={styles.qaHelp}>
+                    {hit.statement_heading_cue.status === "STANDALONE_HEADING_CANDIDATE"
+                      ? `附近独立报表标题候选：《${hit.statement_heading_cue.heading_verbatim}》（PDF 第 ${hit.statement_heading_cue.heading_page} 页）。仅字面标题线索，不证明该数值的报表或列含义。`
+                      : "附近报表标题未定位或文本块跨越标题；报表口径未确定。"}
+                  </p>
                   <blockquote className={styles.answerPassage} style={{whiteSpace: "pre-wrap"}}>
                     {hit.source_excerpt}
                   </blockquote>
@@ -194,13 +236,18 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                     <p className={styles.hash}>
                       规范化文本范围：{hit.canonical_start}–{hit.canonical_end}
                     </p>
+                    {hit.statement_heading_cue.status === "STANDALONE_HEADING_CANDIDATE" && (
+                      <p className={styles.hash}>
+                        标题原文偏移：{hit.statement_heading_cue.heading_start}–{hit.statement_heading_cue.heading_end}
+                      </p>
+                    )}
                   </details>
                 </article>
               ))}
             </>
           )}
           <p className={styles.hash}>检索身份：{packet.retrieval_id}</p>
-          <p><strong>检索相关性：未审核 · 财务语义：NOT_PERFORMED · 发布：BLOCKED</strong></p>
+          <p><strong>检索相关性：未审核 · 报表标题：仅候选线索 · 财务语义：NOT_PERFORMED · 发布：BLOCKED</strong></p>
         </div>
       )}
     </section>
