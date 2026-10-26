@@ -102,6 +102,8 @@ def _validated_evidence(source: SourceDocument, packet: dict, question: str, as_
             or packet.get("retrieval_review") != "CANDIDATES_NOT_RELEVANCE_QUALIFIED"
             or packet.get("retrieval_context_review") != "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED"
             or packet.get("statement_heading_alert") != "NOT_ASSESSED"
+            # M126: alias-expanded recall cannot silently become model claims.
+            or packet.get("terminology_probe", {}).get("status") != "NO_TRIGGER"
             or packet.get("as_of") != as_of.isoformat()):
         raise ValueError("RETRIEVAL_PACKET_NOT_QUALIFIED")
     expected_run_id = sha256("|".join((

@@ -1,0 +1,345 @@
+{
+  "records": [
+    {
+      "id": "operating_revenue",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "innovative_drug_sales_revenue",
+        "pharmaceutical_sales_revenue",
+        "product_sales_revenue",
+        "sales_cash_receipts",
+        "total_operating_revenue"
+      ],
+      "origin": "tushare_income",
+      "preferred_zh": "营业收入",
+      "retrieval_cues": [
+        "营收"
+      ]
+    },
+    {
+      "id": "total_operating_revenue",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "operating_revenue",
+        "product_sales_revenue"
+      ],
+      "origin": "tushare_income",
+      "preferred_zh": "营业总收入",
+      "retrieval_cues": [
+        "营收"
+      ]
+    },
+    {
+      "id": "product_sales_revenue",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "operating_revenue",
+        "pharmaceutical_sales_revenue",
+        "total_operating_revenue"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "产品销售收入",
+      "retrieval_cues": [
+        "产品收入"
+      ]
+    },
+    {
+      "id": "pharmaceutical_sales_revenue",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "innovative_drug_sales_revenue",
+        "operating_revenue",
+        "product_sales_revenue"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "药品销售收入",
+      "retrieval_cues": [
+        "药品收入"
+      ]
+    },
+    {
+      "id": "innovative_drug_sales_revenue",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "generic_drug_sales",
+        "licensing_recognized_revenue",
+        "operating_revenue",
+        "pharmaceutical_sales_revenue"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "创新药销售收入",
+      "retrieval_cues": [
+        "创新药收入",
+        "创新药销售"
+      ]
+    },
+    {
+      "id": "oncology_innovative_sales",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "non_oncology_innovative_sales"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "抗肿瘤创新产品收入",
+      "retrieval_cues": [
+        "肿瘤创新药收入"
+      ]
+    },
+    {
+      "id": "non_oncology_innovative_sales",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "oncology_innovative_sales"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "非肿瘤创新产品收入",
+      "retrieval_cues": [
+        "非肿瘤创新药收入"
+      ]
+    },
+    {
+      "id": "generic_drug_sales",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "innovative_drug_sales_revenue"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "仿制药销售收入",
+      "retrieval_cues": [
+        "仿制药收入"
+      ]
+    },
+    {
+      "id": "licensing_recognized_revenue",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "innovative_drug_sales_revenue",
+        "licensing_potential_deal_value"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "对外许可合作收入",
+      "retrieval_cues": [
+        "海外许可收入",
+        "授权合作收入"
+      ]
+    },
+    {
+      "id": "licensing_potential_deal_value",
+      "kind": "contractual_potential",
+      "not_equivalent_to": [
+        "licensing_recognized_revenue"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "潜在总交易额",
+      "retrieval_cues": [
+        "授权协议总额",
+        "潜在交易价值"
+      ]
+    },
+    {
+      "id": "rd_investment",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "capitalized_rd_expenditure",
+        "expensed_rd_investment",
+        "rd_expense"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "研发投入",
+      "retrieval_cues": [
+        "研发花了多少钱",
+        "研发开支"
+      ]
+    },
+    {
+      "id": "expensed_rd_investment",
+      "kind": "management_measure",
+      "not_equivalent_to": [
+        "rd_expense",
+        "rd_investment"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "费用化研发投入",
+      "retrieval_cues": [
+        "研发花了多少钱",
+        "研发开支"
+      ]
+    },
+    {
+      "id": "rd_expense",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "capitalized_rd_expenditure",
+        "expensed_rd_investment",
+        "rd_investment"
+      ],
+      "origin": "tushare_income",
+      "preferred_zh": "研发费用",
+      "retrieval_cues": [
+        "研发花了多少钱",
+        "研发开支"
+      ]
+    },
+    {
+      "id": "capitalized_rd_expenditure",
+      "kind": "management_or_note",
+      "not_equivalent_to": [
+        "rd_expense",
+        "rd_investment"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "资本化研发支出",
+      "retrieval_cues": [
+        "研发资本化"
+      ]
+    },
+    {
+      "id": "net_profit",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "adjusted_parent_profit",
+        "profit_attributable_parent"
+      ],
+      "origin": "tushare_income",
+      "preferred_zh": "净利润",
+      "retrieval_cues": [
+        "净赚"
+      ]
+    },
+    {
+      "id": "profit_attributable_parent",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "adjusted_parent_profit",
+        "net_profit"
+      ],
+      "origin": "tushare_income",
+      "preferred_zh": "归属于上市公司股东的净利润",
+      "retrieval_cues": [
+        "归母净利润"
+      ]
+    },
+    {
+      "id": "adjusted_parent_profit",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "net_profit",
+        "profit_attributable_parent"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "扣除非经常性损益的归母净利润",
+      "retrieval_cues": [
+        "扣非归母净利润"
+      ]
+    },
+    {
+      "id": "operating_cashflow_net",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "financing_cashflow_net",
+        "investing_cashflow_net",
+        "sales_cash_receipts"
+      ],
+      "origin": "tushare_cashflow",
+      "preferred_zh": "经营活动产生的现金流量净额",
+      "retrieval_cues": [
+        "经营现金流",
+        "经营现金流净额",
+        "经营现金流在哪里"
+      ]
+    },
+    {
+      "id": "investing_cashflow_net",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "financing_cashflow_net",
+        "operating_cashflow_net"
+      ],
+      "origin": "tushare_cashflow",
+      "preferred_zh": "投资活动产生的现金流量净额",
+      "retrieval_cues": [
+        "投资现金流"
+      ]
+    },
+    {
+      "id": "financing_cashflow_net",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "investing_cashflow_net",
+        "operating_cashflow_net"
+      ],
+      "origin": "tushare_cashflow",
+      "preferred_zh": "筹资活动产生的现金流量净额",
+      "retrieval_cues": [
+        "融资现金流"
+      ]
+    },
+    {
+      "id": "sales_cash_receipts",
+      "kind": "statement_metric",
+      "not_equivalent_to": [
+        "operating_cashflow_net",
+        "operating_revenue"
+      ],
+      "origin": "tushare_cashflow",
+      "preferred_zh": "销售商品、提供劳务收到的现金",
+      "retrieval_cues": [
+        "销售回款"
+      ]
+    },
+    {
+      "id": "regulatory_approvals",
+      "kind": "management_event",
+      "not_equivalent_to": [
+        "phase_three_pipeline"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "创新成果获批上市",
+      "retrieval_cues": [
+        "新药批准上市",
+        "上市批准"
+      ]
+    },
+    {
+      "id": "phase_three_pipeline",
+      "kind": "management_event",
+      "not_equivalent_to": [
+        "regulatory_approvals"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "临床Ⅲ期推进",
+      "retrieval_cues": [
+        "三期临床",
+        "III期临床"
+      ]
+    },
+    {
+      "id": "innovative_share_of_drug_sales",
+      "kind": "management_ratio",
+      "not_equivalent_to": [
+        "non_oncology_share_of_innovation_sales"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "创新药销售收入占药品销售收入的比重",
+      "retrieval_cues": [
+        "创新药销售占比"
+      ]
+    },
+    {
+      "id": "non_oncology_share_of_innovation_sales",
+      "kind": "management_ratio",
+      "not_equivalent_to": [
+        "innovative_share_of_drug_sales"
+      ],
+      "origin": "hengrui_2026h1",
+      "preferred_zh": "非肿瘤创新产品收入占创新药销售收入的比重",
+      "retrieval_cues": [
+        "非肿瘤创新药占比"
+      ]
+    }
+  ],
+  "scope": "RETRIEVAL_ONLY_NOT_ACCOUNTING_EQUIVALENCE",
+  "source_audit_version": "m126-terminology-audit-v0.1",
+  "status": "CANDIDATE_ONLY",
+  "version": "frp-m126-retrieval-candidates-v1"
+}

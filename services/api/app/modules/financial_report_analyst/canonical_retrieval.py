@@ -19,6 +19,7 @@ from app.evidence.pdf_canonicalizer import CanonicalDocument, canonicalize_pdf
 from app.modules.financial_report_analyst.source_context import (
     CONTEXT_VERSION, attach_heading_context,
 )
+from app.modules.financial_report_analyst import terminology_candidates
 
 RETRIEVER_VERSION = "frp-canonical-lexical-v1"
 _REPORT_KEY = "600276-2026H1"  # Local report selection; not a question/answer rule.
@@ -90,6 +91,8 @@ def retrieve_from_canonical(
             or len(question) > 240 or len(question.encode("utf-8")) > 800):
         raise ValueError("RETRIEVAL_QUESTION_INVALID")
 
+    # M126: terminology matches only affect retrieval candidates; not assertions.
+    terminology_probe = terminology_candidates.candidate_probe(question)
     tokens = _terms(question)
     windows = list(_windows(document))
     if not windows:
@@ -100,11 +103,13 @@ def retrieve_from_canonical(
     ranked = []
     for (page, start, end, excerpt), terms in zip(windows, terms_by_window):
         matched = tokens & terms
-        if not matched:
+        expansion_bonus = terminology_candidates.candidate_score(excerpt, terminology_probe)
+        if not matched and not expansion_bonus:
             continue
         # Local keyword recall baseline. Score is NOT a relevance probability.
         score = sum(log1p(total / (1 + frequency[term])) for term in matched)
         score *= (0.8 + 0.2 * len(matched) / max(len(tokens), 1))
+        score += expansion_bonus
         ranked.append((score, page, start, end, excerpt))
     ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
 
@@ -137,10 +142,12 @@ def retrieve_from_canonical(
 
     hits, heading_alert = attach_heading_context(document, hits)
 
-    run_id = sha256("|".join((
-        RETRIEVER_VERSION, source.document_id, source.canonical_sha256,
-        as_of.date().isoformat(), question,
-    )).encode("utf-8")).hexdigest()
+    identity = [RETRIEVER_VERSION, source.document_id, source.canonical_sha256,
+                as_of.date().isoformat(), question]
+    if terminology_probe["status"] == "ACTIVATED":
+        identity.extend((terminology_candidates.VERSION,
+                         terminology_candidates.REGISTRY_SHA256))
+    run_id = sha256("|".join(identity).encode("utf-8")).hexdigest()
     return {
         "status": "RETRIEVAL_CANDIDATES_READY" if hits else "WITHHELD",
         "reason": None if hits else "NO_LEXICAL_MATCH_NOT_EVIDENCE_OF_ABSENCE",
@@ -155,6 +162,7 @@ def retrieve_from_canonical(
         "source_sha256": source.source_sha256,
         "canonical_sha256": source.canonical_sha256,
         "evidence": hits,
+        "terminology_probe": terminology_probe,
         "context_probe_version": CONTEXT_VERSION,
         "statement_heading_alert": heading_alert,
         "retrieval_context_review": "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED",
@@ -164,6 +172,7 @@ def retrieve_from_canonical(
         "report_storage": "NOT_PERSISTED",
         "limitations": (
             "Lexical candidates only; not an answer or evidence-sufficiency judgment."
+            " Candidate terminology is retrieval-only, never accounting equivalence;"
             " Chinese/English synonym matching and table geometry are not qualified."
         ),
     }

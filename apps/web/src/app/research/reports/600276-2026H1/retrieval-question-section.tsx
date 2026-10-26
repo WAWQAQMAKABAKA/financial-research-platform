@@ -44,6 +44,21 @@ type Packet = {
   source_sha256: string;
   canonical_sha256: string;
   evidence: Evidence[];
+  terminology_probe: {
+    version: "frp-m126-retrieval-candidates-v1";
+    registry_sha256: string;
+    status: "ACTIVATED" | "NO_TRIGGER";
+    matched_cues: string[];
+    candidates: {
+      concept_id: string;
+      preferred_zh: string;
+      kind: string;
+      origin: string;
+      not_equivalent_to: string[];
+    }[];
+    distinct_concepts_warning: "NON_EQUIVALENT_CANDIDATES" | "NOT_ASSESSED";
+    review: "RETRIEVAL_CUES_ONLY_NOT_FINANCIAL_EQUIVALENCE";
+  };
   retrieval_review: "CANDIDATES_NOT_RELEVANCE_QUALIFIED";
   context_probe_version: "frp-standalone-statement-heading-cue-v1";
   statement_heading_alert: "MULTIPLE_STATEMENT_HEADING_CANDIDATES" | "NOT_ASSESSED";
@@ -78,6 +93,28 @@ function verifiedPacket(
     typeof v.retrieval_id !== "string" || !HEX.test(v.retrieval_id) ||
     typeof v.as_of !== "string" || !Number.isFinite(Date.parse(v.as_of)) ||
     v.retrieval_review !== "CANDIDATES_NOT_RELEVANCE_QUALIFIED" ||
+    !isRecord(v.terminology_probe) ||
+    v.terminology_probe.version !== "frp-m126-retrieval-candidates-v1" ||
+    typeof v.terminology_probe.registry_sha256 !== "string" ||
+    !HEX.test(v.terminology_probe.registry_sha256) ||
+    !(v.terminology_probe.status === "ACTIVATED" || v.terminology_probe.status === "NO_TRIGGER") ||
+    v.terminology_probe.review !== "RETRIEVAL_CUES_ONLY_NOT_FINANCIAL_EQUIVALENCE" ||
+    !(v.terminology_probe.distinct_concepts_warning === "NON_EQUIVALENT_CANDIDATES" ||
+      v.terminology_probe.distinct_concepts_warning === "NOT_ASSESSED") ||
+    !Array.isArray(v.terminology_probe.matched_cues) ||
+    v.terminology_probe.matched_cues.length > 8 ||
+    !v.terminology_probe.matched_cues.every((x: unknown) => typeof x === "string" && x.length <= 40) ||
+    !Array.isArray(v.terminology_probe.candidates) ||
+    v.terminology_probe.candidates.length > 8 ||
+    !v.terminology_probe.candidates.every((x: unknown) =>
+      isRecord(x) && typeof x.concept_id === "string" && x.concept_id.length <= 80 &&
+      typeof x.preferred_zh === "string" && x.preferred_zh.length <= 40 &&
+      typeof x.kind === "string" && typeof x.origin === "string" &&
+      Array.isArray(x.not_equivalent_to) &&
+      x.not_equivalent_to.every((z: unknown) => typeof z === "string" && z.length <= 80)
+    ) ||
+    (v.terminology_probe.status === "NO_TRIGGER" && v.terminology_probe.candidates.length !== 0) ||
+    (v.terminology_probe.status === "ACTIVATED" && v.terminology_probe.candidates.length === 0) ||
     v.context_probe_version !== "frp-standalone-statement-heading-cue-v1" ||
     !(v.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" ||
       v.statement_heading_alert === "NOT_ASSESSED") ||
@@ -205,6 +242,19 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
           ) : (
             <>
               <h3>相关原始片段候选（{packet.evidence.length} 条）</h3>
+              {packet.terminology_probe.status === "ACTIVATED" && (
+                <div className={styles.withheld} role="note">
+                  <strong>术语扩展候选（仅用于原文召回）</strong>
+                  <p>输入词项：{packet.terminology_probe.matched_cues.join("、")}。</p>
+                  <p>独立候选概念：{packet.terminology_probe.candidates.map((x) =>
+                    `${x.preferred_zh} (${x.concept_id})`
+                  ).join("；")}。</p>
+                  {packet.terminology_probe.distinct_concepts_warning === "NON_EQUIVALENT_CANDIDATES" && (
+                    <p><strong>部分候选概念已标记为不等价，禁止混合数值或口径。</strong></p>
+                  )}
+                  <p>这些术语不代表已找到准确答案；当前暂不允许通过扩展结果调用模型草稿。</p>
+                </div>
+              )}
               <p className={styles.qaHelp}>
                 根据原文词项匹配排序，尚未评定是否足以回答问题。只引用原始PDF；
                 财务报表表格的行列含义没有因检索而被验证。
@@ -247,7 +297,8 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
               ))}
             </>
           )}
-          {packet.status === "RETRIEVAL_CANDIDATES_READY" && (
+          {packet.status === "RETRIEVAL_CANDIDATES_READY" &&
+            packet.terminology_probe.status === "NO_TRIGGER" && (
             <AnalystPreviewSection
               key={packet.retrieval_id}
               source={source}
