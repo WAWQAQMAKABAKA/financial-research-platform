@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import RetrievalQuestionSection from "./retrieval-question-section";
 import { useState } from "react";
 import styles from "./report.module.css";
 
@@ -584,7 +585,11 @@ export default function HengruiSourceReport() {
           </div>
         </section>
 
-        <LiveQuestionSection />
+        <RetrievalQuestionSection source={SOURCE} />
+        <details className={styles.appendix}>
+          <summary>此前两项固定问题实验（仅用于回归比对）</summary>
+          <LiveQuestionSection />
+        </details>
 
         <div className={styles.toolbar}>
           <div>

@@ -441,3 +441,42 @@ def local_question_intent(
         )
     finally:
         _M119A_INTENT_LOCK.release()
+
+# M122: local-only source-bound lexical retrieval preview (no model, no GT).
+class LocalEvidenceSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    report_key: Literal["600276-2026H1"]
+    question: str = Field(min_length=1, max_length=240)
+
+
+@app.post("/api/v1/research/local-evidence-search")
+@_serialize_pdf_route
+def local_evidence_search(
+    request: LocalEvidenceSearchRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    if os.environ.get("FRP_LOCAL_RETRIEVAL_UI") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (len(token) < 32 or not x_frp_local_token
+        or not compare_digest(token, x_frp_local_token)):
+        raise HTTPException(status_code=404, detail="Not available")
+
+    pdf_path = os.environ.get("FRP_LOCAL_REVENUE_PDF")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import canonical_retrieval, revenue_scope
+
+    try:
+        return canonical_retrieval.retrieve_report_evidence(
+            revenue_scope.SOURCE, Path(pdf_path), request.question,
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        # Never log document text, source paths, model credentials or request data.
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
