@@ -59,6 +59,7 @@ type Packet = {
     distinct_concepts_warning: "NON_EQUIVALENT_CANDIDATES" | "NOT_ASSESSED";
     review: "RETRIEVAL_CUES_ONLY_NOT_FINANCIAL_EQUIVALENCE";
   };
+  ranking_version: "frp-m127-quantity-proximity-page-diversity-v1" | "frp-legacy-lexical-v1";
   retrieval_review: "CANDIDATES_NOT_RELEVANCE_QUALIFIED";
   context_probe_version: "frp-standalone-statement-heading-cue-v1";
   statement_heading_alert: "MULTIPLE_STATEMENT_HEADING_CANDIDATES" | "NOT_ASSESSED";
@@ -115,6 +116,10 @@ function verifiedPacket(
     ) ||
     (v.terminology_probe.status === "NO_TRIGGER" && v.terminology_probe.candidates.length !== 0) ||
     (v.terminology_probe.status === "ACTIVATED" && v.terminology_probe.candidates.length === 0) ||
+    (v.terminology_probe.status === "ACTIVATED" &&
+      v.ranking_version !== "frp-m127-quantity-proximity-page-diversity-v1") ||
+    (v.terminology_probe.status === "NO_TRIGGER" &&
+      v.ranking_version !== "frp-legacy-lexical-v1") ||
     v.context_probe_version !== "frp-standalone-statement-heading-cue-v1" ||
     !(v.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" ||
       v.statement_heading_alert === "NOT_ASSESSED") ||
@@ -255,8 +260,14 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                   <p>这些术语不代表已找到准确答案；当前暂不允许通过扩展结果调用模型草稿。</p>
                 </div>
               )}
+              {packet.terminology_probe.status === "ACTIVATED" && (
+                <p className={styles.qaHelp}>
+                  M127 候选排序优先保留不同原文页；金额类问题参考财务术语附近的数字线索。
+                  这只是检索启发式，不证明数字属于该概念，也不证明报表口径正确。
+                </p>
+              )}
               <p className={styles.qaHelp}>
-                根据原文词项匹配排序，尚未评定是否足以回答问题。只引用原始PDF；
+                根据原文词项及有限排序线索展示，尚未评定是否足以回答问题。只引用原始PDF；
                 财务报表表格的行列含义没有因检索而被验证。
               </p>
               {packet.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" && (

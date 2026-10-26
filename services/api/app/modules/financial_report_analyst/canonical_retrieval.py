@@ -42,6 +42,61 @@ def _terms(value: str) -> set[str]:
     return terms
 
 
+# M127: bounded, non-semantic ranking hints for terminology-expanded previews.
+# These hints identify text proximity only, not units, dates, statement scope,
+# accounting equivalence or financial correctness.
+RANKING_VERSION = "frp-m127-quantity-proximity-page-diversity-v1"
+_AMOUNT_QUERY_CUES = ("多少", "金额", "规模", "占比", "比重", "同比", "增速", "增幅")
+_AMOUNT_TOKEN = re.compile(
+    r"(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|"
+    r"\d+(?:\.\d+)?(?:亿元|万元|亿美元|万美元|元|美元|%))"
+)
+
+
+def _amount_proximity_bonus(question: str, excerpt: str, probe: dict) -> float:
+    """Rank, never interpret, an amount near the prefix of an audited concept.
+
+    Only active for amount-style questions with an expanded terminology cue.
+    The monetary token is NOT assigned to the concept; it is just nearby text.
+    """
+    if (probe["status"] != "ACTIVATED"
+            or not any(cue in question for cue in _AMOUNT_QUERY_CUES)):
+        return 0.0
+    compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt)).casefold()
+    amounts = tuple(match.start() for match in _AMOUNT_TOKEN.finditer(compact))
+    if not amounts:
+        return 0.0
+    for candidate in probe["candidates"]:
+        label = re.sub(r"\s+", "", unicodedata.normalize(
+            "NFKC", candidate["preferred_zh"])).casefold()
+        anchor = label[:min(4, len(label))]
+        if len(anchor) < 2:
+            continue
+        for match in re.finditer(re.escape(anchor), compact):
+            # A bounded text window does not prove the nearby amount's meaning.
+            if any(abs(position - match.end()) <= 85 for position in amounts):
+                return 15.0
+    return 0.0
+
+
+def _diversify_pages(ranked: list[tuple]) -> list[tuple]:
+    """Take best available excerpt per page before using page duplicates.
+
+    Not a hard exclusion: when too few unique pages exist, the remainder
+    fills from the original score order. Distinct cash-flow pages are retained.
+    """
+    seen = set()
+    unique = []
+    extra = []
+    for hit in ranked:
+        if hit[1] in seen:
+            extra.append(hit)
+        else:
+            seen.add(hit[1])
+            unique.append(hit)
+    return unique + extra
+
+
 def _windows(document: CanonicalDocument):
     text = document.canonical_text
     previous_end = 0
@@ -110,8 +165,12 @@ def retrieve_from_canonical(
         score = sum(log1p(total / (1 + frequency[term])) for term in matched)
         score *= (0.8 + 0.2 * len(matched) / max(len(tokens), 1))
         score += expansion_bonus
+        if terminology_probe["status"] == "ACTIVATED":
+            score += _amount_proximity_bonus(question, excerpt, terminology_probe)
         ranked.append((score, page, start, end, excerpt))
     ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
+    if terminology_probe["status"] == "ACTIVATED":
+        ranked = _diversify_pages(ranked)
 
     hits = []
     for _, page, start, end, excerpt in ranked[:_MAX_HITS]:
@@ -146,7 +205,8 @@ def retrieve_from_canonical(
                 as_of.date().isoformat(), question]
     if terminology_probe["status"] == "ACTIVATED":
         identity.extend((terminology_candidates.VERSION,
-                         terminology_candidates.REGISTRY_SHA256))
+                         terminology_candidates.REGISTRY_SHA256,
+                         RANKING_VERSION))
     run_id = sha256("|".join(identity).encode("utf-8")).hexdigest()
     return {
         "status": "RETRIEVAL_CANDIDATES_READY" if hits else "WITHHELD",
@@ -163,6 +223,8 @@ def retrieve_from_canonical(
         "canonical_sha256": source.canonical_sha256,
         "evidence": hits,
         "terminology_probe": terminology_probe,
+        "ranking_version": (RANKING_VERSION if terminology_probe["status"] == "ACTIVATED"
+                            else "frp-legacy-lexical-v1"),
         "context_probe_version": CONTEXT_VERSION,
         "statement_heading_alert": heading_alert,
         "retrieval_context_review": "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED",
@@ -173,6 +235,8 @@ def retrieve_from_canonical(
         "limitations": (
             "Lexical candidates only; not an answer or evidence-sufficiency judgment."
             " Candidate terminology is retrieval-only, never accounting equivalence;"
+            " expanded results may use amount proximity and one-page-first diversity;"
+            " proximity does not prove a value belongs to a concept;"
             " Chinese/English synonym matching and table geometry are not qualified."
         ),
     }

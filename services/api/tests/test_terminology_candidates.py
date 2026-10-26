@@ -119,3 +119,90 @@ def test_no_trigger_retains_old_retrieval_status():
     )
     assert packet["terminology_probe"]["status"] == "NO_TRIGGER"
     assert packet["retrieval_review"] == "CANDIDATES_NOT_RELEVANCE_QUALIFIED"
+
+
+# M127 tests are synthetic, offline and concern ranking—not financial answers.
+def test_quantitative_cue_is_bounded_and_requires_real_amount_token():
+    probe = terminology_candidates.candidate_probe("海外许可收入是多少？")
+    assert canonical_retrieval._amount_proximity_bonus(
+        "海外许可收入是多少？", "对外许可合作报告期确认收入25.00亿元。", probe,
+    ) == 15.0
+    assert canonical_retrieval._amount_proximity_bonus(
+        "海外许可收入是多少？", "对外许可业务的会计政策说明。", probe,
+    ) == 0.0
+    assert canonical_retrieval._amount_proximity_bonus(
+        "海外许可收入在哪里？", "对外许可合作报告期确认收入25.00亿元。", probe,
+    ) == 0.0
+    # Section numbers alone must never count as financial values.
+    assert canonical_retrieval._amount_proximity_bonus(
+        "海外许可收入是多少？", "第2节：对外许可业务的政策说明。", probe,
+    ) == 0.0
+
+
+def test_amount_near_expanded_concept_beats_generic_policy_excerpt():
+    source, doc = _doc(
+        "本年度许可收入政策遵循履约义务的规定。公司提供一般性会计政策说明。\n",
+        "管理层说明：对外许可合作业务报告期确认收入25.00亿元。\n",
+        "海外合作风险尚需评估。\n",
+    )
+    out = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "海外许可收入是多少？", as_of=WHEN,
+    )
+    assert out["terminology_probe"]["status"] == "ACTIVATED"
+    assert out["ranking_version"] == canonical_retrieval.RANKING_VERSION
+    assert out["evidence"][0]["source_page"] == 2
+    assert out["research_publication"] == "BLOCKED"
+    assert out["financial_semantic_review"] == "NOT_PERFORMED"
+
+
+def test_expanded_retrieval_prioritizes_page_diversity_without_discarding_spans():
+    repeat = "公司对外许可合作业务确认收入25.00亿元。\n"
+    source, doc = _doc(
+        repeat * 38,
+        "另一页披露对外许可合作收入26.00亿元。\n",
+        "第三页披露对外许可合作收入27.00亿元。\n",
+    )
+    out = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "海外许可收入是多少？", as_of=WHEN,
+    )
+    assert {hit["source_page"] for hit in out["evidence"][:3]} == {1, 2, 3}
+    for hit in out["evidence"]:
+        assert doc.canonical_text[hit["canonical_start"]:hit["canonical_end"]] == hit["source_excerpt"]
+    assert out["research_publication"] == "BLOCKED"
+
+
+def test_m127_identity_versioned_for_expansion_but_not_legacy_query():
+    source, doc = _doc(
+        "对外许可合作业务确认收入25.00亿元。\n",
+        "第二页披露对外许可合作收入26.00亿元。\n",
+    )
+    question = "海外许可收入是多少？"
+    out = canonical_retrieval.retrieve_from_canonical(source, doc, question, as_of=WHEN)
+    assert out["ranking_version"] == canonical_retrieval.RANKING_VERSION
+    identity = "|".join((canonical_retrieval.RETRIEVER_VERSION,
+        source.document_id, source.canonical_sha256, WHEN.date().isoformat(), question,
+        terminology_candidates.VERSION, terminology_candidates.REGISTRY_SHA256,
+        canonical_retrieval.RANKING_VERSION))
+    assert out["retrieval_id"] == sha256(identity.encode()).hexdigest()
+    legacy = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "对外许可合作收入", as_of=WHEN,
+    )
+    assert legacy["terminology_probe"]["status"] == "NO_TRIGGER"
+    assert legacy["ranking_version"] == "frp-legacy-lexical-v1"
+    old_identity = "|".join((canonical_retrieval.RETRIEVER_VERSION,
+        source.document_id, source.canonical_sha256, WHEN.date().isoformat(),
+        "对外许可合作收入"))
+    assert legacy["retrieval_id"] == sha256(old_identity.encode()).hexdigest()
+
+
+def test_multiple_cashflow_pages_survive_diversification():
+    source, doc = _doc(
+        "合并现金流量表\n经营活动产生的现金流量净额 123.45元\n",
+        "母公司现金流量表\n经营活动产生的现金流量净额 67.89元\n",
+    )
+    out = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "经营现金流在哪里？", as_of=WHEN,
+    )
+    assert out["terminology_probe"]["status"] == "ACTIVATED"
+    assert {hit["source_page"] for hit in out["evidence"]} == {1, 2}
+    assert out["research_publication"] == "BLOCKED"
