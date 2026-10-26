@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AnalystPreviewSection from "./analyst-preview-section";
 import styles from "./report.module.css";
 
 const REPORT_KEY = "600276-2026H1";
@@ -245,6 +246,15 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                 </article>
               ))}
             </>
+          )}
+          {packet.status === "RETRIEVAL_CANDIDATES_READY" && (
+            <AnalystPreviewSection
+              key={packet.retrieval_id}
+              source={source}
+              question={packet.question}
+              retrievalId={packet.retrieval_id}
+              evidenceIds={packet.evidence.map((hit) => hit.evidence_id)}
+            />
           )}
           <p className={styles.hash}>检索身份：{packet.retrieval_id}</p>
           <p><strong>检索相关性：未审核 · 报表标题：仅候选线索 · 财务语义：NOT_PERFORMED · 发布：BLOCKED</strong></p>

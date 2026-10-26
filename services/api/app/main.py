@@ -480,3 +480,67 @@ def local_evidence_search(
     except Exception:
         # Never log document text, source paths, model credentials or request data.
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+# M124: explicitly local, unpublished retrieval-grounded Analyst preview.
+class LocalRetrievalAnalystRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    report_key: Literal["600276-2026H1"]
+    question: str = Field(min_length=1, max_length=240)
+
+
+_M124_MODEL_CALL_LIMIT = 3
+_M124_MODEL_CALL_COUNT = 0
+_M124_MODEL_LOCK = Lock()
+
+
+@app.post("/api/v1/research/local-retrieval-analyst")
+@_serialize_pdf_route
+def local_retrieval_analyst(
+    request: LocalRetrievalAnalystRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    if os.environ.get("FRP_LOCAL_ANALYST_PREVIEW_UI") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (len(token) < 32 or not x_frp_local_token or
+            not compare_digest(token, x_frp_local_token)):
+        raise HTTPException(status_code=404, detail="Not available")
+    source_pdf = os.environ.get("FRP_LOCAL_REVENUE_PDF")
+    if not source_pdf:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import (
+        canonical_retrieval, retrieval_analyst, revenue_scope,
+    )
+    try:
+        as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
+        packet = canonical_retrieval.retrieve_report_evidence(
+            revenue_scope.SOURCE, Path(source_pdf), request.question, as_of=as_of,
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+    # Check evidence and statement-scope gates without consuming model budget.
+    try:
+        retrieval_analyst._validated_evidence(
+            revenue_scope.SOURCE, packet, request.question, as_of,
+        )
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return retrieval_analyst._withheld("EVIDENCE_OR_SCOPE_NOT_QUALIFIED", packet)
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return retrieval_analyst._withheld("MODEL_NOT_CONFIGURED", packet)
+    if not _M124_MODEL_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="MODEL_REQUEST_IN_PROGRESS")
+    global _M124_MODEL_CALL_COUNT
+    try:
+        if _M124_MODEL_CALL_COUNT >= _M124_MODEL_CALL_LIMIT:
+            raise HTTPException(status_code=429, detail="LOCAL_MODEL_CALL_LIMIT_REACHED")
+        _M124_MODEL_CALL_COUNT += 1  # Charge the one-call budget before contacting provider.
+        return retrieval_analyst.draft_from_verified_retrieval(
+            revenue_scope.SOURCE, packet, request.question,
+            as_of=as_of, api_key=api_key,
+        )
+    finally:
+        _M124_MODEL_LOCK.release()
