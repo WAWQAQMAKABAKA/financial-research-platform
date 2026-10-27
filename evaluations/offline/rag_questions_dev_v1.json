@@ -1,0 +1,38 @@
+{
+  "schema_version": "frp-m130-rag-questions-dev-v1",
+  "corpus_type": "AUTHOR_CURATED_DEVELOPMENT_NOT_PROTECTED_GT",
+  "source_binding": {
+    "report_key": "600276-2026H1",
+    "document_id": "600276-2026H1-cninfo-1225483600",
+    "source_sha256": "ff6910663a9726acb889aa061a8bab1433f58890d81ebea013b8c637a097a7aa",
+    "canonical_sha256": "96784f9deba244aab85bd117b9a1894bdcbd689a8368554f84014703f1e8b864"
+  },
+  "as_of": "2026-10-27T16:00:00+08:00",
+  "cases": [
+    {
+      "case_id": "D001",
+      "family": "licensed_revenue_term_expansion",
+      "question": "创新药海外许可收入是多少？"
+    },
+    {
+      "case_id": "D002",
+      "family": "ambiguous_agreement_potential_value",
+      "question": "授权协议总额是多少？"
+    },
+    {
+      "case_id": "D003",
+      "family": "literal_legacy_query",
+      "question": "对外许可合作收入"
+    },
+    {
+      "case_id": "D004",
+      "family": "broad_multifacet_unannotated",
+      "question": "研发投入和现金流量表有哪些披露？"
+    },
+    {
+      "case_id": "D005",
+      "family": "cashflow_alias_unannotated",
+      "question": "经营现金流在哪里？"
+    }
+  ]
+}
