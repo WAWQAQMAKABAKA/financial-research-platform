@@ -21,6 +21,9 @@ type Evidence = {
   canonical_end: number;
   source_excerpt: string;
   review_scope: "VERIFIED_CANONICAL_TEXT_SPAN_ONLY";
+  licensing_wording_cues: (
+    "RECOGNITION_WORDING" | "POTENTIAL_VALUE_WORDING" | "NOT_YET_RECOGNIZED_WORDING"
+  )[];
   statement_heading_cue: {
     status: "STANDALONE_HEADING_CANDIDATE" | "UNRESOLVED";
     heading_verbatim: string | null;
@@ -59,7 +62,16 @@ type Packet = {
     distinct_concepts_warning: "NON_EQUIVALENT_CANDIDATES" | "NOT_ASSESSED";
     review: "RETRIEVAL_CUES_ONLY_NOT_FINANCIAL_EQUIVALENCE";
   };
-  ranking_version: "frp-m127-quantity-proximity-page-diversity-v1" | "frp-legacy-lexical-v1";
+  ranking_version:
+    | "frp-m127-quantity-proximity-page-diversity-v1"
+    | "frp-m129-licensing-cue-priority-v1"
+    | "frp-legacy-lexical-v1";
+  licensing_wording_probe: {
+    version: "frp-m129-licensing-wording-v1";
+    status: "ACTIVATED" | "NOT_APPLICABLE";
+    target_concept_id: "licensing_recognized_revenue" | "licensing_potential_deal_value" | null;
+    review: "LITERAL_DISCLOSURE_WORDING_ONLY_NOT_FINANCIAL_SEMANTICS";
+  };
   retrieval_review: "CANDIDATES_NOT_RELEVANCE_QUALIFIED";
   context_probe_version: "frp-standalone-statement-heading-cue-v1";
   statement_heading_alert: "MULTIPLE_STATEMENT_HEADING_CANDIDATES" | "NOT_ASSESSED";
@@ -117,9 +129,16 @@ function verifiedPacket(
     (v.terminology_probe.status === "NO_TRIGGER" && v.terminology_probe.candidates.length !== 0) ||
     (v.terminology_probe.status === "ACTIVATED" && v.terminology_probe.candidates.length === 0) ||
     (v.terminology_probe.status === "ACTIVATED" &&
-      v.ranking_version !== "frp-m127-quantity-proximity-page-diversity-v1") ||
+      v.ranking_version !== "frp-m127-quantity-proximity-page-diversity-v1" &&
+      v.ranking_version !== "frp-m129-licensing-cue-priority-v1") ||
     (v.terminology_probe.status === "NO_TRIGGER" &&
       v.ranking_version !== "frp-legacy-lexical-v1") ||
+    !isRecord(v.licensing_wording_probe) ||
+    v.licensing_wording_probe.version !== "frp-m129-licensing-wording-v1" ||
+    !(v.licensing_wording_probe.status === "ACTIVATED" ||
+      v.licensing_wording_probe.status === "NOT_APPLICABLE") ||
+    v.licensing_wording_probe.review !==
+      "LITERAL_DISCLOSURE_WORDING_ONLY_NOT_FINANCIAL_SEMANTICS" ||
     v.context_probe_version !== "frp-standalone-statement-heading-cue-v1" ||
     !(v.statement_heading_alert === "MULTIPLE_STATEMENT_HEADING_CANDIDATES" ||
       v.statement_heading_alert === "NOT_ASSESSED") ||
@@ -137,6 +156,21 @@ function verifiedPacket(
   if (v.status === "RETRIEVAL_CANDIDATES_READY" && (
     v.evidence.length === 0 || v.reason !== null
   )) return false;
+  const conceptIds = v.terminology_probe.candidates.map((item: unknown) =>
+    isRecord(item) ? item.concept_id : null,
+  );
+  const target = conceptIds.length === 1 &&
+    (conceptIds[0] === "licensing_recognized_revenue" ||
+     conceptIds[0] === "licensing_potential_deal_value") ? conceptIds[0] : null;
+  const wording = v.licensing_wording_probe;
+  if ((target !== null) !== (wording.status === "ACTIVATED") ||
+      wording.target_concept_id !== target ||
+      (target !== null && v.ranking_version !== "frp-m129-licensing-cue-priority-v1") ||
+      (target === null && v.terminology_probe.status === "ACTIVATED" &&
+        v.ranking_version !== "frp-m127-quantity-proximity-page-diversity-v1")) return false;
+  const allowedCues = new Set([
+    "RECOGNITION_WORDING", "POTENTIAL_VALUE_WORDING", "NOT_YET_RECOGNIZED_WORDING",
+  ]);
   const ids = new Set<string>();
   return v.evidence.every((candidate: unknown) => {
     if (!isRecord(candidate)) return false;
@@ -153,6 +187,12 @@ function verifiedPacket(
       typeof e.source_excerpt !== "string" ||
       !e.source_excerpt.trim() || e.source_excerpt.length > 1200 ||
       e.review_scope !== "VERIFIED_CANONICAL_TEXT_SPAN_ONLY" ||
+      !Array.isArray(e.licensing_wording_cues) ||
+      e.licensing_wording_cues.length > 3 ||
+      (target === null && e.licensing_wording_cues.length > 0) ||
+      !e.licensing_wording_cues.every((cue: unknown) =>
+        typeof cue === "string" && allowedCues.has(cue)) ||
+      new Set(e.licensing_wording_cues).size !== e.licensing_wording_cues.length ||
       !isRecord(e.statement_heading_cue)
     ) return false;
     const cue = e.statement_heading_cue;
@@ -277,6 +317,14 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                   <p>这些术语不代表已找到准确答案；当前暂不允许通过扩展结果调用模型草稿。</p>
                 </div>
               )}
+              {packet.licensing_wording_probe.status === "ACTIVATED" && (
+                <div className={styles.withheld} role="note">
+                  <strong>M129 · 对外许可披露措辞区分（非财务语义认证）</strong>
+                  <p>本次仅标记原文中的“报告期确认收入”“潜在交易价值”及“尚未确认收入”字面表述。</p>
+                  <p>潜在交易价值不能直接当作已确认收入；同一片段也可能包含不同交易或期间。
+                    即使标记吻合问题，也不证明某个金额就是答案。</p>
+                </div>
+              )}
               {packet.terminology_probe.status === "ACTIVATED" && (
                 <p className={styles.qaHelp}>
                   M127 候选排序优先保留不同原文页；金额类问题参考财务术语附近的数字线索。
@@ -305,6 +353,17 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                       ? `附近独立报表标题候选：《${hit.statement_heading_cue.heading_verbatim}》（PDF 第 ${hit.statement_heading_cue.heading_page} 页）。仅字面标题线索，不证明该数值的报表或列含义。`
                       : "附近报表标题未定位或文本块跨越标题；报表口径未确定。"}
                   </p>
+                  {hit.licensing_wording_cues.length > 0 && (
+                    <div className={styles.withheld} role="note">
+                      <strong>原文措辞线索（未经财务语义审核）：</strong>
+                      <p>{hit.licensing_wording_cues.map((cue) =>
+                        cue === "RECOGNITION_WORDING" ? "出现报告期确认收入措辞" :
+                        cue === "POTENTIAL_VALUE_WORDING" ? "出现潜在交易价值措辞（不可等同已确认收入）" :
+                        "出现尚未确认收入措辞"
+                      ).join("；")}。</p>
+                      <p>仅反映此片段的字面用语，不将任何金额绑定到概念、期间或交易。</p>
+                    </div>
+                  )}
                   <blockquote className={styles.answerPassage} style={{whiteSpace: "pre-wrap"}}>
                     {hit.source_excerpt}
                   </blockquote>

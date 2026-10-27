@@ -46,6 +46,13 @@ def _terms(value: str) -> set[str]:
 # These hints identify text proximity only, not units, dates, statement scope,
 # accounting equivalence or financial correctness.
 RANKING_VERSION = "frp-m127-quantity-proximity-page-diversity-v1"
+# M129: filing-wording cues from already verified text, not financial definitions.
+LICENSING_WORDING_VERSION = "frp-m129-licensing-wording-v1"
+LICENSING_RANKING_VERSION = "frp-m129-licensing-cue-priority-v1"
+LICENSING_REVIEW = "LITERAL_DISCLOSURE_WORDING_ONLY_NOT_FINANCIAL_SEMANTICS"
+_LICENSING_CONCEPTS = frozenset((
+    "licensing_recognized_revenue", "licensing_potential_deal_value",
+))
 _AMOUNT_QUERY_CUES = ("多少", "金额", "规模", "占比", "比重", "同比", "增速", "增幅")
 _AMOUNT_TOKEN = re.compile(
     r"(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|"
@@ -77,6 +84,48 @@ def _amount_proximity_bonus(question: str, excerpt: str, probe: dict) -> float:
             if any(abs(position - match.end()) <= 85 for position in amounts):
                 return 15.0
     return 0.0
+
+
+def _licensing_target(probe: dict) -> str | None:
+    """Only act on one unambiguous registry concept (M126 provenance)."""
+    candidates = probe["candidates"]
+    if probe["status"] != "ACTIVATED" or len(candidates) != 1:
+        return None
+    concept = candidates[0]["concept_id"]
+    return concept if concept in _LICENSING_CONCEPTS else None
+
+
+def _licensing_wording_cues(excerpt: str) -> list[str]:
+    """Exact wording in a bounded excerpt, never an amount-to-metric assignment.
+
+    Different disclosures (including different periods or transactions) may
+    appear within the SAME excerpt. Multiple cues indicate mixed wording and
+    must never be simplified into an accounting verdict.
+    """
+    normalized = re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt))
+    cues: list[str] = []
+    if ("报告期内确认收入" in normalized or "报告期内确认的" in normalized):
+        cues.append("RECOGNITION_WORDING")
+    if ("潜在总交易价值" in normalized or "潜在总交易额" in normalized):
+        cues.append("POTENTIAL_VALUE_WORDING")
+    if "尚未确认收入" in normalized:
+        cues.append("NOT_YET_RECOGNIZED_WORDING")
+    return cues
+
+
+def _licensing_priority(target: str | None, excerpt: str) -> int:
+    """Put an unambiguous target phrase first; no numerical or scope claims."""
+    if target is None:
+        return 0
+    cues = set(_licensing_wording_cues(excerpt))
+    if target == "licensing_recognized_revenue":
+        # An excerpt mentioning both potential/absent and recognized wording
+        # is NOT a clean source of one particular financial amount.
+        return int(cues == {"RECOGNITION_WORDING"} and
+                   "对外许可" in re.sub(r"\s+", "", excerpt))
+    if target == "licensing_potential_deal_value":
+        return int("POTENTIAL_VALUE_WORDING" in cues)
+    return 0
 
 
 def _diversify_pages(ranked: list[tuple]) -> list[tuple]:
@@ -148,6 +197,7 @@ def retrieve_from_canonical(
 
     # M126: terminology matches only affect retrieval candidates; not assertions.
     terminology_probe = terminology_candidates.candidate_probe(question)
+    licensing_target = _licensing_target(terminology_probe)
     tokens = _terms(question)
     windows = list(_windows(document))
     if not windows:
@@ -168,7 +218,13 @@ def retrieve_from_canonical(
         if terminology_probe["status"] == "ACTIVATED":
             score += _amount_proximity_bonus(question, excerpt, terminology_probe)
         ranked.append((score, page, start, end, excerpt))
-    ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
+    if licensing_target is not None:
+        # M129: a clearly matching disclosure phrase precedes an unrelated
+        # transaction-value snippet. This is a lexical candidate ordering only.
+        ranked.sort(key=lambda x: (-_licensing_priority(licensing_target, x[4]),
+                                   -x[0], x[1], x[2]))
+    else:
+        ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
     if terminology_probe["status"] == "ACTIVATED":
         ranked = _diversify_pages(ranked)
 
@@ -197,6 +253,10 @@ def retrieve_from_canonical(
             "canonical_end": evidence.canonical_end,
             "source_excerpt": evidence.excerpt,
             "review_scope": "VERIFIED_CANONICAL_TEXT_SPAN_ONLY",
+            "licensing_wording_cues": (
+                _licensing_wording_cues(excerpt)
+                if licensing_target is not None else []
+            ),
         })
 
     hits, heading_alert = attach_heading_context(document, hits)
@@ -206,7 +266,9 @@ def retrieve_from_canonical(
     if terminology_probe["status"] == "ACTIVATED":
         identity.extend((terminology_candidates.VERSION,
                          terminology_candidates.REGISTRY_SHA256,
-                         RANKING_VERSION))
+                         LICENSING_RANKING_VERSION if licensing_target else RANKING_VERSION))
+    if licensing_target:
+        identity.extend((LICENSING_WORDING_VERSION, licensing_target))
     run_id = sha256("|".join(identity).encode("utf-8")).hexdigest()
     return {
         "status": "RETRIEVAL_CANDIDATES_READY" if hits else "WITHHELD",
@@ -223,8 +285,17 @@ def retrieve_from_canonical(
         "canonical_sha256": source.canonical_sha256,
         "evidence": hits,
         "terminology_probe": terminology_probe,
-        "ranking_version": (RANKING_VERSION if terminology_probe["status"] == "ACTIVATED"
-                            else "frp-legacy-lexical-v1"),
+        "licensing_wording_probe": {
+            "version": LICENSING_WORDING_VERSION,
+            "status": "ACTIVATED" if licensing_target else "NOT_APPLICABLE",
+            "target_concept_id": licensing_target,
+            "review": LICENSING_REVIEW,
+        },
+        "ranking_version": (
+            LICENSING_RANKING_VERSION if licensing_target else
+            RANKING_VERSION if terminology_probe["status"] == "ACTIVATED" else
+            "frp-legacy-lexical-v1"
+        ),
         "context_probe_version": CONTEXT_VERSION,
         "statement_heading_alert": heading_alert,
         "retrieval_context_review": "HEADING_CUE_ONLY_NOT_SEMANTICALLY_REVIEWED",
@@ -236,6 +307,8 @@ def retrieve_from_canonical(
             "Lexical candidates only; not an answer or evidence-sufficiency judgment."
             " Candidate terminology is retrieval-only, never accounting equivalence;"
             " expanded results may use amount proximity and one-page-first diversity;"
+            " licensing cue priority only matches literal wording, never a financial amount;"
+            " excerpts may contain mixed periods, transactions or recognition status;"
             " proximity does not prove a value belongs to a concept;"
             " Chinese/English synonym matching and table geometry are not qualified."
         ),

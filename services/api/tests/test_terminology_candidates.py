@@ -149,7 +149,7 @@ def test_amount_near_expanded_concept_beats_generic_policy_excerpt():
         source, doc, "海外许可收入是多少？", as_of=WHEN,
     )
     assert out["terminology_probe"]["status"] == "ACTIVATED"
-    assert out["ranking_version"] == canonical_retrieval.RANKING_VERSION
+    assert out["ranking_version"] == canonical_retrieval.LICENSING_RANKING_VERSION
     assert out["evidence"][0]["source_page"] == 2
     assert out["research_publication"] == "BLOCKED"
     assert out["financial_semantic_review"] == "NOT_PERFORMED"
@@ -173,10 +173,10 @@ def test_expanded_retrieval_prioritizes_page_diversity_without_discarding_spans(
 
 def test_m127_identity_versioned_for_expansion_but_not_legacy_query():
     source, doc = _doc(
-        "对外许可合作业务确认收入25.00亿元。\n",
-        "第二页披露对外许可合作收入26.00亿元。\n",
+        "研发投入25.00亿元。\n",
+        "第二页披露研发费用26.00亿元。\n",
     )
-    question = "海外许可收入是多少？"
+    question = "研发花了多少钱？"
     out = canonical_retrieval.retrieve_from_canonical(source, doc, question, as_of=WHEN)
     assert out["ranking_version"] == canonical_retrieval.RANKING_VERSION
     identity = "|".join((canonical_retrieval.RETRIEVER_VERSION,
@@ -185,14 +185,102 @@ def test_m127_identity_versioned_for_expansion_but_not_legacy_query():
         canonical_retrieval.RANKING_VERSION))
     assert out["retrieval_id"] == sha256(identity.encode()).hexdigest()
     legacy = canonical_retrieval.retrieve_from_canonical(
-        source, doc, "对外许可合作收入", as_of=WHEN,
+        source, doc, "研发投入", as_of=WHEN,
     )
     assert legacy["terminology_probe"]["status"] == "NO_TRIGGER"
     assert legacy["ranking_version"] == "frp-legacy-lexical-v1"
     old_identity = "|".join((canonical_retrieval.RETRIEVER_VERSION,
         source.document_id, source.canonical_sha256, WHEN.date().isoformat(),
-        "对外许可合作收入"))
+        "研发投入"))
     assert legacy["retrieval_id"] == sha256(old_identity.encode()).hexdigest()
+
+
+def test_m129_revenue_question_prioritizes_clear_recognition_wording_over_potential_value():
+    source, doc = _doc(
+        "海外许可交易：13笔合作，潜在总交易价值约420亿美元。\n",
+        "创新药对外许可合作报告期内确认收入14.22亿元。\n",
+        "海外许可协议尚未确认收入。\n",
+    )
+    question = "海外许可收入是多少？"
+    out = canonical_retrieval.retrieve_from_canonical(source, doc, question, as_of=WHEN)
+    assert out["ranking_version"] == canonical_retrieval.LICENSING_RANKING_VERSION
+    assert out["licensing_wording_probe"] == {
+        "version": canonical_retrieval.LICENSING_WORDING_VERSION,
+        "status": "ACTIVATED",
+        "target_concept_id": "licensing_recognized_revenue",
+        "review": canonical_retrieval.LICENSING_REVIEW,
+    }
+    assert out["evidence"][0]["source_page"] == 2
+    by_page = {x["source_page"]: x["licensing_wording_cues"] for x in out["evidence"]}
+    assert "RECOGNITION_WORDING" in by_page[2]
+    assert "POTENTIAL_VALUE_WORDING" in by_page[1]
+    assert "NOT_YET_RECOGNIZED_WORDING" in by_page[3]
+    assert out["financial_semantic_review"] == "NOT_PERFORMED"
+    assert out["research_publication"] == "BLOCKED"
+    assert out["report_storage"] == "NOT_PERSISTED"
+    with pytest.raises(ValueError, match="RETRIEVAL_PACKET_NOT_QUALIFIED"):
+        retrieval_analyst._validated_evidence(source, out, question, WHEN)
+
+
+def test_m129_potential_value_query_keeps_nonrecognition_warning_separate():
+    source, doc = _doc(
+        "公司披露潜在总交易额约152亿美元，根据条件执行。\n",
+        "海外许可交易报告期内确认收入10亿元。\n",
+    )
+    out = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "授权协议总额是多少？", as_of=WHEN,
+    )
+    assert out["evidence"][0]["source_page"] == 1
+    assert "POTENTIAL_VALUE_WORDING" in out["evidence"][0]["licensing_wording_cues"]
+    assert out["licensing_wording_probe"]["target_concept_id"] == "licensing_potential_deal_value"
+    assert out["research_publication"] == "BLOCKED"
+
+
+def test_m129_mixed_recognition_and_nonrecognition_not_clean_priority():
+    source, doc = _doc(
+        "海外许可交易尚未确认收入，同时其他合作报告期内确认收入10亿元。\n",
+        "创新药对外许可合作报告期内确认收入12亿元。\n",
+    )
+    out = canonical_retrieval.retrieve_from_canonical(
+        source, doc, "海外许可收入是多少？", as_of=WHEN,
+    )
+    assert out["evidence"][0]["source_page"] == 2
+    mixed = next(x for x in out["evidence"] if x["source_page"] == 1)
+    assert set(mixed["licensing_wording_cues"]) == {
+        "RECOGNITION_WORDING", "NOT_YET_RECOGNIZED_WORDING",
+    }
+
+
+def test_m129_legacy_and_nonlicensing_expansion_preserve_old_identity():
+    source, doc = _doc(
+        "创新药对外许可合作报告期内确认收入12亿元。\n",
+        "管理层披露研发投入10亿元。\n",
+    )
+    for query, expected_version in (
+        ("对外许可合作收入", "frp-legacy-lexical-v1"),
+        ("研发花了多少钱？", canonical_retrieval.RANKING_VERSION),
+    ):
+        out = canonical_retrieval.retrieve_from_canonical(source, doc, query, as_of=WHEN)
+        assert out["ranking_version"] == expected_version
+        assert out["licensing_wording_probe"]["status"] == "NOT_APPLICABLE"
+        assert all(x["licensing_wording_cues"] == [] for x in out["evidence"])
+
+
+def test_m129_identity_versions_targeted_ranking_and_wording_cues():
+    source, doc = _doc(
+        "海外许可交易潜在总交易价值约420亿美元。\n",
+        "对外许可合作报告期内确认收入14.22亿元。\n",
+    )
+    question = "海外许可收入是多少？"
+    out = canonical_retrieval.retrieve_from_canonical(source, doc, question, as_of=WHEN)
+    identity = "|".join((canonical_retrieval.RETRIEVER_VERSION,
+        source.document_id, source.canonical_sha256, WHEN.date().isoformat(), question,
+        terminology_candidates.VERSION, terminology_candidates.REGISTRY_SHA256,
+        canonical_retrieval.LICENSING_RANKING_VERSION,
+        canonical_retrieval.LICENSING_WORDING_VERSION,
+        "licensing_recognized_revenue"))
+    assert out["retrieval_id"] == sha256(identity.encode()).hexdigest()
+    assert out["ranking_version"] == canonical_retrieval.LICENSING_RANKING_VERSION
 
 
 def test_multiple_cashflow_pages_survive_diversification():
