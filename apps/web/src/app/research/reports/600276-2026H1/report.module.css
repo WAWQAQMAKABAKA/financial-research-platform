@@ -389,6 +389,17 @@
 .qaResult .answerValue{margin:10px 0}
 @media(max-width:750px){.qaPanel{padding:18px}.qaForm button{width:100%}}
 
+/* M128: the question, original evidence and optional uncertain draft share one brief. */
+.briefHeader{border-bottom:1px solid #d2e3e6;padding-bottom:16px;margin-bottom:20px}
+.briefHeader h3{margin:7px 0;font-size:16px}
+.briefQuestion{font-size:17px;line-height:1.8;font-weight:750;color:#193f4b;overflow-wrap:anywhere}
+.briefMeta{font-size:12px;color:#526e78;line-height:1.8}
+.briefStatus{font-size:12px;font-weight:750;color:#825547;line-height:1.8}
+.exampleBoundary{border:1px solid #d4e2e4;border-left:4px solid #749ca4;padding:17px 21px;border-radius:10px;background:#fff;margin:22px 0 10px}
+.exampleBoundary strong{font-size:13px;color:#265660}
+.exampleBoundary p{font-size:12px;color:#5c7680;line-height:1.8;margin-bottom:0}
+.card[id^="question-evidence-"]{scroll-margin-top:22px}
+
 /* M120: supported question selectors, secondary evidence workflow. */
 .qaExamples{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
 .qaExamples button{background:#f2f8f8;border:1px solid #bdd2d7;border-radius:8px;color:#24535f;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer}

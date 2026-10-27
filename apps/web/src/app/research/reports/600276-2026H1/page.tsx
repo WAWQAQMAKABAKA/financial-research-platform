@@ -591,9 +591,15 @@ export default function HengruiSourceReport() {
           <LiveQuestionSection />
         </details>
 
+        <section className={styles.exampleBoundary} aria-label="固定来源示例与问题证据简报的区别">
+          <strong>以下是独立的固定来源示例，不是上方问题的自动答案。</strong>
+          <p>下方证据包只展示此前固定问题下的来源定位与受限观点核验；
+            不会随你在上方输入的研究问题改变，不能作为该问题已经得到回答的证明。</p>
+        </section>
+
         <div className={styles.toolbar}>
           <div>
-            <strong>查看完整原始证据包（可选）</strong>
+            <strong>查看固定问题的原始证据包（可选）</strong>
             <p>
               重新校验本地原始PDF、文件哈希及证据关联。
               不调用付费模型，不保存或发布研究报告。

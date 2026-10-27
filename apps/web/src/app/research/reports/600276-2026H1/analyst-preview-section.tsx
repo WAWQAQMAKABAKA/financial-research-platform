@@ -12,6 +12,16 @@ type SourceIdentity = Readonly<{
   canonicalSha: string;
 }>;
 
+type EvidenceBinding = Readonly<{
+  evidence_id: string;
+  source_page: number;
+  source_excerpt: string;
+}>;
+
+function normalizedQuote(text: string): string {
+  return text.normalize("NFKC").replace(/\s+/gu, "").toLowerCase();
+}
+
 type PreviewClaim = {
   claim_id: string;
   text: string;
@@ -75,9 +85,12 @@ function validate(
   source: SourceIdentity,
   question: string,
   retrievalId: string,
-  evidenceIds: Set<string>,
+  evidence: EvidenceBinding[],
 ): raw is PreviewPacket {
   if (!record(raw)) return false;
+  const evidenceIds = new Set(evidence.map((item) => item.evidence_id));
+  const evidenceById = new Map(evidence.map((item) => [item.evidence_id, item]));
+  if (evidenceById.size !== evidence.length || evidence.length < 1 || evidence.length > 5) return false;
   if (
     !["UNPUBLISHED_ANALYST_PREVIEW", "WITHHELD"].includes(String(raw.status)) ||
     raw.report_key !== "600276-2026H1" || raw.question !== question ||
@@ -144,6 +157,11 @@ function validate(
       Number.isInteger(claim.source_page) && Number(claim.source_page) >= 1 &&
       Number(claim.source_page) <= 182 &&
       typeof claim.source_quote === "string" && claim.source_quote.trim().length > 0 &&
+      evidenceById.get(claim.evidence_id)?.source_page === claim.source_page &&
+      !!normalizedQuote(claim.source_quote) &&
+      !!evidenceById.get(claim.evidence_id)?.source_excerpt &&
+      normalizedQuote(evidenceById.get(claim.evidence_id)!.source_excerpt)
+        .includes(normalizedQuote(claim.source_quote)) &&
       claim.review.verdict === "UNCERTAIN" &&
       claim.review.scope === "QUOTE_AND_NUMERIC_BINDING_ONLY" &&
       claim.review.reason === "SOURCE_QUOTE_BOUND_SEMANTICS_UNREVIEWED";
@@ -151,12 +169,12 @@ function validate(
 }
 
 export default function AnalystPreviewSection({
-  source, question, retrievalId, evidenceIds,
+  source, question, retrievalId, evidence,
 }: {
   source: SourceIdentity;
   question: string;
   retrievalId: string;
-  evidenceIds: string[];
+  evidence: EvidenceBinding[];
 }) {
   const [busy, setBusy] = useState(false);
   const [attempted, setAttempted] = useState(false);
@@ -177,7 +195,7 @@ export default function AnalystPreviewSection({
       });
       if (!response.ok) throw new Error("REQUEST_FAILED");
       const data: unknown = await response.json();
-      if (!validate(data, source, question, retrievalId, new Set(evidenceIds))) {
+      if (!validate(data, source, question, retrievalId, evidence)) {
         throw new Error("REVIEW_CONTRACT_MISMATCH");
       }
       setResult(data);
@@ -211,11 +229,18 @@ export default function AnalystPreviewSection({
       )}
       {result?.status === "UNPUBLISHED_ANALYST_PREVIEW" && (
         <div aria-live="polite" className={styles.qaResult}>
-          <h3>研究摘录 · 未经财务语义审核</h3>
+          <h3>本次问题的研究摘录草稿 · 未经财务语义审核</h3>
+          <p className={styles.qaHelp}>对应问题：{question}</p>
           {result.claims.map((claim) => (
             <article className={styles.answerManagement} key={claim.claim_id}>
               <p><strong>{claim.claim_id} · {claim.text}</strong></p>
               <blockquote className={styles.answerPassage}>{claim.source_quote}</blockquote>
+              <p className={styles.qaHelp}>
+                <a href={`#question-evidence-${claim.evidence_id}`}>
+                  核对本次证据 E{evidence.findIndex((item) => item.evidence_id === claim.evidence_id) + 1}
+                </a>
+                {" "}· 引用必须匹配该证据的PDF页码和原文
+              </p>
               <a className={styles.source} target="_blank" rel="noopener noreferrer"
                 href={`${source.url}#page=${claim.source_page}`}>
                 原始公告 · PDF 第 {claim.source_page} 页
@@ -250,6 +275,7 @@ export default function AnalystPreviewSection({
               </p>
             </section>
           )}
+          <p className={styles.hash}>本次草稿ID：{result.draft_id} · 对应检索ID：{result.retrieval_id}</p>
           <p className={styles.challengeCaution}>
             所有陈述仍是未审核的模型草稿；不可视为合格研究报告。
             财务语义：NOT_PERFORMED · 发布：BLOCKED · 未持久化。

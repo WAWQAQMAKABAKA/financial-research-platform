@@ -209,12 +209,13 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
 
   return (
     <section className={styles.qaPanel} aria-label="原始公告开放式证据检索">
-      <p className={styles.kicker}>开放式问题 · 原始证据检索实验</p>
-      <h2>向公告提出任何研究问题，先找证据</h2>
+      <p className={styles.kicker}>M128 · 问题绑定的证据简报 · 本地未发布</p>
+      <h2>提出研究问题，查看可核对的原始证据</h2>
       <p className={styles.qaHelp}>
         当前资料库仅包含已核验的恒瑞医药 2026 年半年度公告。
-        该功能检索相关原文片段，不是财务分析答案或报告摘要；
-        不调用 DeepSeek，也不计算比率。
+        先返回问题对应的原文候选，并把每条候选连接到原始PDF。
+        仅在符合现有安全条件时，可自行选择一次付费模型草稿。
+        本简报独立于下方的固定问题示例；候选和草稿均不是经审核的财务答案。
       </p>
       <form className={styles.qaForm} onSubmit={(event) => {
         event.preventDefault();
@@ -242,6 +243,22 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
       {message && <div className={styles.error} role="alert"><p>{message}</p></div>}
       {packet && (
         <div className={styles.qaResult} aria-live="polite">
+          <header className={styles.briefHeader} aria-label="本次问题绑定的证据简报">
+            <p className={styles.smallTag}>证据简报 · 未发布 · 仅限本次问题</p>
+            <h3>研究问题</h3>
+            <p className={styles.briefQuestion}>{packet.question}</p>
+            <p className={styles.briefMeta}>
+              恒瑞医药 · 2026年半年度 · 原始PDF · 检索时点：{packet.as_of}
+            </p>
+            <p className={styles.qaHelp}>
+              {packet.status === "WITHHELD"
+                ? "未找到词项命中；没有形成财务结论。"
+                : `找到 ${packet.evidence.length} 条未经相关性或财务语义核验的原文候选。`}
+            </p>
+            <p className={styles.briefStatus}>
+              来源绑定已核对 · 财务语义 NOT_PERFORMED · 发布 BLOCKED · 保存 NOT_PERSISTED
+            </p>
+          </header>
           {packet.status === "WITHHELD" ? (
             <p>未找到词项匹配的原文候选；这不表示公告没有相关事实。可换用公告中的中文术语。</p>
           ) : (
@@ -277,9 +294,12 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
                     请打开原始PDF核对表头、所属报表和期间。尚未完成财务语义审核。</p>
                 </div>
               )}
-              {packet.evidence.map((hit) => (
-                <article key={hit.evidence_id} className={styles.card}>
-                  <p className={styles.smallTag}>原文位置 · PDF 第 {hit.source_page} 页</p>
+              {packet.evidence.map((hit, index) => (
+                <article key={hit.evidence_id} id={`question-evidence-${hit.evidence_id}`}
+                  className={styles.card}>
+                  <p className={styles.smallTag}>
+                    证据 E{index + 1} · 原文候选 · PDF 第 {hit.source_page} 页
+                  </p>
                   <p className={styles.qaHelp}>
                     {hit.statement_heading_cue.status === "STANDALONE_HEADING_CANDIDATE"
                       ? `附近独立报表标题候选：《${hit.statement_heading_cue.heading_verbatim}》（PDF 第 ${hit.statement_heading_cue.heading_page} 页）。仅字面标题线索，不证明该数值的报表或列含义。`
@@ -315,11 +335,24 @@ export default function RetrievalQuestionSection({ source }: { source: SourceIde
               source={source}
               question={packet.question}
               retrievalId={packet.retrieval_id}
-              evidenceIds={packet.evidence.map((hit) => hit.evidence_id)}
+              evidence={packet.evidence.map((hit) => ({
+                evidence_id: hit.evidence_id,
+                source_page: hit.source_page,
+                source_excerpt: hit.source_excerpt,
+              }))}
             />
           )}
-          <p className={styles.hash}>检索身份：{packet.retrieval_id}</p>
-          <p><strong>检索相关性：未审核 · 报表标题：仅候选线索 · 财务语义：NOT_PERFORMED · 发布：BLOCKED</strong></p>
+          <details className={styles.details}>
+            <summary>本次简报的来源与检索身份（可核对）</summary>
+            <p className={styles.hash}>检索ID：{packet.retrieval_id}</p>
+            <p className={styles.hash}>文档ID：{packet.document_id}</p>
+            <p className={styles.hash}>原始PDF SHA-256：{packet.source_sha256}</p>
+            <p className={styles.hash}>规范化文本 SHA-256：{packet.canonical_sha256}</p>
+            <p className={styles.hash}>检索版本：{packet.retriever_version} · 排序版本：{packet.ranking_version}</p>
+            <a className={styles.source} href={source.url}
+              target="_blank" rel="noopener noreferrer">打开唯一原始公告</a>
+          </details>
+          <p><strong>检索相关性：未审核 · 报表标题：仅候选线索 · 财务语义：NOT_PERFORMED · 发布：BLOCKED · 保存：NOT_PERSISTED</strong></p>
         </div>
       )}
     </section>
