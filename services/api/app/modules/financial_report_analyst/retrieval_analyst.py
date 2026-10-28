@@ -89,7 +89,9 @@ def _validated_evidence(source: SourceDocument, packet: dict, question: str, as_
     if any(term in _norm(question) for term in _FORBIDDEN_REQUEST):
         raise ValueError("TRADING_REQUEST_NOT_SUPPORTED")
     if (packet.get("status") != "RETRIEVAL_CANDIDATES_READY"
-            or packet.get("report_key") != "600276-2026H1"
+            # Bind the packet to the already trusted SourceDocument identity.
+            # The customer API report allowlist remains unchanged.
+            or packet.get("report_key") != f"{source.ticker}-{source.report_period}"
             or packet.get("question") != question
             or packet.get("document_id") != source.document_id
             or packet.get("source_url") != source.source_url

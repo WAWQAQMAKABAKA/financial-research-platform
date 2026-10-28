@@ -22,7 +22,6 @@ from app.modules.financial_report_analyst.source_context import (
 from app.modules.financial_report_analyst import terminology_candidates
 
 RETRIEVER_VERSION = "frp-canonical-lexical-v1"
-_REPORT_KEY = "600276-2026H1"  # Local report selection; not a question/answer rule.
 _WINDOW = 540
 _OVERLAP = 105
 _MAX_HITS = 5
@@ -275,7 +274,9 @@ def retrieve_from_canonical(
         "reason": None if hits else "NO_LEXICAL_MATCH_NOT_EVIDENCE_OF_ABSENCE",
         "retrieval_id": run_id,
         "retriever_version": RETRIEVER_VERSION,
-        "report_key": _REPORT_KEY,
+        # SourceDocument is server-selected and source/PIT verified upstream.
+        # This is metadata identity, not question-driven report selection.
+        "report_key": f"{source.ticker}-{source.report_period}",
         "question": question,
         "as_of": as_of.isoformat(),
         "document_id": source.document_id,
