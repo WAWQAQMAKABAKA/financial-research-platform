@@ -1,0 +1,232 @@
+{
+  "schema_version": "frp-m130-b4-a-share-common-questions-dev-v1",
+  "corpus_type": "AUTHOR_CURATED_CROSS_ISSUER_DEVELOPMENT_NOT_INDEPENDENT_HOLDOUT",
+  "scope": "SSE_SZSE_A_SHARES_2026H1",
+  "as_of": "2026-10-27T16:00:00+08:00",
+  "question_count": 30,
+  "source_count": 3,
+  "sources": [
+    {
+      "ticker": "600276",
+      "issuer": "恒瑞医药",
+      "report_key": "600276-2026H1",
+      "document_id": "600276-2026H1-cninfo-1225483600",
+      "report_period": "2026H1",
+      "published_on": "2026-08-20",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-20/1225483600.PDF",
+      "source_sha256": "ff6910663a9726acb889aa061a8bab1433f58890d81ebea013b8c637a097a7aa",
+      "canonical_sha256": "96784f9deba244aab85bd117b9a1894bdcbd689a8368554f84014703f1e8b864",
+      "pdf_pages": 182
+    },
+    {
+      "ticker": "600519",
+      "issuer": "贵州茅台",
+      "report_key": "600519-2026H1",
+      "document_id": "600519-2026H1-cninfo-1225475868",
+      "report_period": "2026H1",
+      "published_on": "2026-08-15",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-15/1225475868.PDF",
+      "source_sha256": "0e10aa26be46b1cf3cd03f06e834c7fb98d5dd0d661b96f8fddd4af7e846a4f6",
+      "canonical_sha256": "d4bae9919d35905660950718598f27de8e89d2f5be703b56bfc1b4b0e0698d81",
+      "pdf_pages": 110
+    },
+    {
+      "ticker": "000651",
+      "issuer": "格力电器",
+      "report_key": "000651-2026H1",
+      "document_id": "000651-2026H1-cninfo-1225515004",
+      "report_period": "2026H1",
+      "published_on": "2026-08-27",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-27/1225515004.PDF",
+      "source_sha256": "50da2e03fddbe9dd424d8fe7881f47fb34efa5d38c96aa9449c12e445c3b2dec",
+      "canonical_sha256": "a1c2d9618fc19c0684c40a12a120ecc196a76ab239ff2bf84d5595d4734f2a76",
+      "pdf_pages": 190
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "A600276-01",
+      "ticker": "600276",
+      "family": "revenue",
+      "question": "公司2026年上半年营业收入是多少？"
+    },
+    {
+      "case_id": "A600276-02",
+      "ticker": "600276",
+      "family": "profit",
+      "question": "上半年归属于上市公司股东的净利润是多少？"
+    },
+    {
+      "case_id": "A600276-03",
+      "ticker": "600276",
+      "family": "operating_cashflow",
+      "question": "经营活动产生的现金流量净额是多少？"
+    },
+    {
+      "case_id": "A600276-04",
+      "ticker": "600276",
+      "family": "rd",
+      "question": "2026年上半年研发投入情况如何？"
+    },
+    {
+      "case_id": "A600276-05",
+      "ticker": "600276",
+      "family": "business",
+      "question": "半年报有哪些创新药业务进展披露？"
+    },
+    {
+      "case_id": "A600276-06",
+      "ticker": "600276",
+      "family": "licensing",
+      "question": "海外许可合作收入与潜在协议金额有什么区别？"
+    },
+    {
+      "case_id": "A600276-07",
+      "ticker": "600276",
+      "family": "risk",
+      "question": "公司披露了哪些主要经营风险？"
+    },
+    {
+      "case_id": "A600276-08",
+      "ticker": "600276",
+      "family": "statement_scope",
+      "question": "合并利润表与母公司利润表列示的营业收入有什么不同？"
+    },
+    {
+      "case_id": "A600276-09",
+      "ticker": "600276",
+      "family": "comparison",
+      "question": "上半年经营活动现金流和净利润同比变化方向一致吗？"
+    },
+    {
+      "case_id": "A600276-10",
+      "ticker": "600276",
+      "family": "unsupported_future",
+      "question": "2027年创新药业务准确能实现多少收入？"
+    },
+    {
+      "case_id": "A600519-01",
+      "ticker": "600519",
+      "family": "revenue",
+      "question": "贵州茅台2026年上半年营业收入是多少？"
+    },
+    {
+      "case_id": "A600519-02",
+      "ticker": "600519",
+      "family": "profit",
+      "question": "上半年归属于上市公司股东的净利润是多少？"
+    },
+    {
+      "case_id": "A600519-03",
+      "ticker": "600519",
+      "family": "operating_cashflow",
+      "question": "经营活动产生的现金流量净额是多少？"
+    },
+    {
+      "case_id": "A600519-04",
+      "ticker": "600519",
+      "family": "rd",
+      "question": "公司披露了哪些研发支出或研发活动信息？"
+    },
+    {
+      "case_id": "A600519-05",
+      "ticker": "600519",
+      "family": "business",
+      "question": "茅台酒和系列酒分别有哪些收入披露？"
+    },
+    {
+      "case_id": "A600519-06",
+      "ticker": "600519",
+      "family": "distribution",
+      "question": "直销渠道与批发代理渠道的收入分别是多少？"
+    },
+    {
+      "case_id": "A600519-07",
+      "ticker": "600519",
+      "family": "risk",
+      "question": "半年报披露了哪些经营风险？"
+    },
+    {
+      "case_id": "A600519-08",
+      "ticker": "600519",
+      "family": "balance_sheet",
+      "question": "期末合同负债金额是多少？"
+    },
+    {
+      "case_id": "A600519-09",
+      "ticker": "600519",
+      "family": "comparison",
+      "question": "2026年上半年营收和归母净利润的同比增速分别是多少？"
+    },
+    {
+      "case_id": "A600519-10",
+      "ticker": "600519",
+      "family": "unsupported_future",
+      "question": "公司能否保证2027年销售收入达到某个准确金额？"
+    },
+    {
+      "case_id": "A000651-01",
+      "ticker": "000651",
+      "family": "revenue",
+      "question": "格力电器2026年上半年营业收入是多少？"
+    },
+    {
+      "case_id": "A000651-02",
+      "ticker": "000651",
+      "family": "profit",
+      "question": "上半年归属于上市公司股东的净利润是多少？"
+    },
+    {
+      "case_id": "A000651-03",
+      "ticker": "000651",
+      "family": "operating_cashflow",
+      "question": "经营活动产生的现金流量净额是多少？"
+    },
+    {
+      "case_id": "A000651-04",
+      "ticker": "000651",
+      "family": "rd",
+      "question": "公司上半年研发投入和研发费用分别怎样披露？"
+    },
+    {
+      "case_id": "A000651-05",
+      "ticker": "000651",
+      "family": "business",
+      "question": "空调等主要产品或业务的收入构成如何？"
+    },
+    {
+      "case_id": "A000651-06",
+      "ticker": "000651",
+      "family": "geography",
+      "question": "国内和海外市场的经营情况有哪些披露？"
+    },
+    {
+      "case_id": "A000651-07",
+      "ticker": "000651",
+      "family": "risk",
+      "question": "半年报中管理层列示了哪些主要风险？"
+    },
+    {
+      "case_id": "A000651-08",
+      "ticker": "000651",
+      "family": "balance_sheet",
+      "question": "报告期末应收账款余额是多少？"
+    },
+    {
+      "case_id": "A000651-09",
+      "ticker": "000651",
+      "family": "comparison",
+      "question": "上半年经营现金流与归母净利润变化趋势一致吗？"
+    },
+    {
+      "case_id": "A000651-10",
+      "ticker": "000651",
+      "family": "unsupported_future",
+      "question": "2027年海外业务一定能增长多少百分比？"
+    }
+  ],
+  "financial_answer_ground_truth": "NONE",
+  "evidence_page_annotations": "NONE",
+  "answerability_labels": "NONE",
+  "research_publication": "BLOCKED"
+}
