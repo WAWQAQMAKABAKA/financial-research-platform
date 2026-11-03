@@ -67,3 +67,14 @@ be offered "研发费用" as a candidate, and the user decides.
   are de-duplicated before location.
 - `coverage` is informational; publication authority remains
   `publication_policy.decide_publication`.
+
+## LLM facet proposal (v3)
+
+An opt-in DeepSeek call may propose the 2–3 facets for a multi-fact question
+(`FRP_LOCAL_CLARIFY_LLM=1` + `DEEPSEEK_API_KEY`, budget 4 per process). The
+proposal is untrusted: facets must be unique Chinese phrases of 2–120
+characters, and every facet is still resolved through the deterministic row
+matching, location, literal review and policy. An invalid, unavailable or
+over-budget proposal falls back to the conjunction split. `coverage.plan_source`
+records which path was used; the page shows it. Repair rebuilds never call the
+model.

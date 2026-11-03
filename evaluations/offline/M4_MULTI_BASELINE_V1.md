@@ -84,6 +84,30 @@ Same frozen 8-case set and runtime, with the optional repair suggestion:
 Scorecard unchanged: correct 8/8, unsafe 0, false-sufficient 0, coverage recall
 1.0, missing-status accuracy 1.0, latency 8.2 s avg.
 
+## v3 — LLM facet proposal (`117aca3`)
+
+Same frozen 8-case set, opt-in model path (`--with-llm`, plan budget 8 for the
+run). All five multi-fact publish cases used `LLM_PROPOSAL_VALIDATED` and the
+proposed facets matched the expected metrics:
+
+`营业收入/净利润`, `营业收入/营业成本/净利润`, `营业收入/研发投入`,
+`营业收入/少数股东损益`, `营业总收入/营业收入`.
+
+| Metric | v2 deterministic | v3 LLM facets |
+|---|---|---|
+| Correct interpretations | 8/8 | 8/8 |
+| Unsafe publications | 0 | 0 |
+| False sufficient coverage | 0 | 0 |
+| Coverage recall | 1.0 | 1.0 |
+| Missing-status accuracy | 1.0 | 1.0 |
+| LLM-planned cases | 0 | 5 |
+| Latency avg / max | 8.2 s / 12.0 s | 19.3 s / 29.5 s |
+
+Every proposed facet still resolved to a verified row; a missing facet
+(`研发投入`) remained missing and kept its repair suggestion. Comparison and
+forecast cases never reached the model (intent gate first). The paid path is
+slower but does not change publication.
+
 ## Limitations
 
 - Single document, 8 author-curated cases; not a holdout.
@@ -98,6 +122,6 @@ Scorecard unchanged: correct 8/8, unsafe 0, false-sufficient 0, coverage recall
 
 ## Next
 
-1. Optional LLM requirement proposal, validated against the same closed row set.
-2. Management-text requirements as a separate evidence kind.
-3. A repair-specific evaluation set (candidate quality and confirmation cost).
+1. Management-text requirements as a separate evidence kind.
+2. A repair-specific evaluation set (candidate quality and confirmation cost).
+3. An unseen-document check once a second document is authorized.
