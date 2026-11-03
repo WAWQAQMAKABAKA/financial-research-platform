@@ -296,12 +296,17 @@ def build_report_from_question(
     question: str,
     *,
     as_of: datetime,
+    forced_selection: dict | None = None,
 ) -> dict:
     """Question -> retrieval -> statement rows -> verified cells -> policy.
 
     The question selects *which* rows are cited; it never decides whether they
     are true. Every citation is re-located in the native PDF and re-checked by
     the literal reviewer before the policy may publish it.
+
+    ``forced_selection`` carries a user-resolved metric (from a clarification):
+    ``{"statement_kind", "row_label", "core"}``. It bypasses only the row
+    selection, never the identity, retrieval, literal review or publication.
     """
     entry = source_workspace.REPORTS.get(report_key)
     if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
@@ -371,10 +376,39 @@ def build_report_from_question(
                    "retrieval": retrieval_trace},
         )
 
-    selection = question_selection.select_cells(
-        index, question=question, report_period=document.report_period,
-        column_header=column_header, retrieval_hits=retrieval_trace["hits"],
-    )
+    if forced_selection is not None:
+        selection = {
+            "status": "SELECTION_READY",
+            "reason": None,
+            "version": question_selection.SELECTION_VERSION,
+            "statement_kind": forced_selection["statement_kind"],
+            "column_header": column_header,
+            "rows": [{
+                "row_label": forced_selection["row_label"],
+                "core": forced_selection["core"],
+                "match_chars": len(forced_selection["core"]),
+            }],
+            "trace": {
+                "version": question_selection.SELECTION_VERSION,
+                "question": question,
+                "report_period": document.report_period,
+                "column_header": column_header,
+                "statement_kind": forced_selection["statement_kind"],
+                "statement_title": document_index.SECTION_TITLES[
+                    forced_selection["statement_kind"]],
+                "selection_basis": "USER_RESOLVED_METRIC",
+                "row_labels_considered": 0,
+                "row_candidates": [],
+                "synonyms_applied": [],
+                "synonym_version": question_selection.SYNONYM_VERSION,
+                "normalized_question": None,
+            },
+        }
+    else:
+        selection = question_selection.select_cells(
+            index, question=question, report_period=document.report_period,
+            column_header=column_header, retrieval_hits=retrieval_trace["hits"],
+        )
     selection_trace = _selection_trace(selection)
     if selection["status"] != "SELECTION_READY":
         return _withheld(

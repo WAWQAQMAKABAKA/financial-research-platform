@@ -81,3 +81,96 @@ def test_authorized_question_returns_verified_facts(monkeypatch):
     assert report["report_type"] == "FACTS_ONLY_QUESTION_REPORT"
     assert report["facts"][0]["value_verbatim"] == "6,191,107,217.36"
     assert report["publication"]["research_publication"] == "FACTS_ONLY"
+
+
+ASK_URL = "/api/v1/research/reports/600760-2026H1/ask"
+RESOLVE_URL = "/api/v1/research/reports/600760-2026H1/ask/resolve"
+NET_PROFIT_QUESTION = "600760 中航沈飞 2026 年半年度合并利润表的净利是多少？"
+
+
+def ask_net_profit():
+    headers = {"x-frp-local-token": TOKEN}
+    return TestClient(app).post(ASK_URL, json={"question": NET_PROFIT_QUESTION},
+                                headers=headers)
+
+
+def resolve(question, clarification_id, option_id):
+    headers = {"x-frp-local-token": TOKEN}
+    return TestClient(app).post(
+        RESOLVE_URL,
+        json={"question": question, "clarification_id": clarification_id,
+              "option_id": option_id},
+        headers=headers,
+    )
+
+
+def test_ambiguous_metric_returns_clarification(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    monkeypatch.delenv("FRP_LOCAL_CLARIFY_LLM", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    response = ask_net_profit()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "CLARIFICATION_REQUIRED"
+    assert body["reason"] == "METRIC_IDENTITY_AMBIGUOUS"
+    assert len(body["options"]) >= 2
+    assert body["research_publication"] == "BLOCKED"
+    assert body["clarification_id"]
+    cores = {option["core"] for option in body["options"]}
+    assert "归属于母公司股东的净利润" in cores
+    assert "净利润" in cores
+
+
+def test_clarification_resolve_roundtrip(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    monkeypatch.delenv("FRP_LOCAL_CLARIFY_LLM", raising=False)
+
+    clarification = ask_net_profit().json()
+    attributable = next(
+        option for option in clarification["options"]
+        if option["core"] == "归属于母公司股东的净利润"
+    )
+
+    result = resolve(
+        NET_PROFIT_QUESTION, clarification["clarification_id"],
+        attributable["option_id"],
+    )
+    assert result.status_code == 200
+    report = result.json()
+    assert report["status"] == "REPORT_READY"
+    assert len(report["facts"]) == 1
+    assert report["facts"][0]["row_label"].startswith("1.归属于母公司股东的净利润")
+    assert report["facts"][0]["value_verbatim"] == "473,065,863.24"
+    assert report["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_METRIC"
+
+
+def test_resolve_rejects_tampered_token(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    monkeypatch.delenv("FRP_LOCAL_CLARIFY_LLM", raising=False)
+
+    clarification = ask_net_profit().json()
+    option_id = clarification["options"][0]["option_id"]
+    tampered = clarification["clarification_id"][:-1] + (
+        "0" if clarification["clarification_id"][-1] != "0" else "1"
+    )
+
+    result = resolve(NET_PROFIT_QUESTION, tampered, option_id)
+    assert result.status_code == 422
+
+
+def test_resolve_rejects_unoffered_option(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    monkeypatch.delenv("FRP_LOCAL_CLARIFY_LLM", raising=False)
+
+    clarification = ask_net_profit().json()
+    result = resolve(NET_PROFIT_QUESTION, clarification["clarification_id"], "f" * 64)
+    assert result.status_code == 422

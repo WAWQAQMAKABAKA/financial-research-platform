@@ -603,6 +603,75 @@ def local_facts_report(
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
 
 
+_M3_CLARIFY_LLM_LIMIT = 4
+_M3_CLARIFY_LLM_COUNT = 0
+_M3_CLARIFY_LLM_LOCK = Lock()
+
+
+def _attempt_clarification(
+    report_key: str,
+    pdf_path: str,
+    question: str,
+    *,
+    statement_kind: str,
+    as_of,
+) -> dict | None:
+    """Metric-identity clarification, with an opt-in, budgeted LLM proposal."""
+    from pathlib import Path
+    from app.evidence import corpus_manifest, document_index
+    from app.modules.financial_report_analyst import (
+        clarification, interpretation, question_selection, source_workspace,
+    )
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    entry = source_workspace.REPORTS[report_key]
+    try:
+        index = document_index.index_document_scoped(
+            entry.source, Path(pdf_path), as_of=as_of,
+            section_kinds=frozenset(question_selection.INCOME_STATEMENT_KINDS),
+        )
+    except Exception:
+        return None
+
+    closed = clarification.closed_options(index, document, statement_kind)
+
+    proposed_ids: list[str] | None = None
+    rationale: str | None = None
+    if os.environ.get("FRP_LOCAL_CLARIFY_LLM") == "1":
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if api_key:
+            global _M3_CLARIFY_LLM_COUNT
+            if _M3_CLARIFY_LLM_LOCK.acquire(blocking=False):
+                try:
+                    if _M3_CLARIFY_LLM_COUNT < _M3_CLARIFY_LLM_LIMIT:
+                        _M3_CLARIFY_LLM_COUNT += 1
+                        interp = interpretation.interpret(
+                            question, closed, api_key=api_key,
+                        )
+                        if interp.get("status") == "INTERPRETATION_READY":
+                            proposed_ids = interp["candidate_option_ids"]
+                            rationale = interp["rationale"]
+                finally:
+                    _M3_CLARIFY_LLM_LOCK.release()
+
+    secret = clarification._secret(
+        os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    )
+    return clarification.build_clarification(
+        report_key=report_key, document=document, index=index, question=question,
+        statement_kind=statement_kind, secret=secret,
+        proposed_option_ids=proposed_ids, interpretation_rationale=rationale,
+    )
+
+
+class LocalClarificationResolveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=2, max_length=240)
+    clarification_id: str = Field(min_length=16, max_length=4096)
+    option_id: str = Field(min_length=32, max_length=128)
+
+
 @app.post("/api/v1/research/reports/{report_key}/ask")
 @_serialize_pdf_route
 def local_facts_report_ask(
@@ -610,7 +679,7 @@ def local_facts_report_ask(
     request: LocalFactsQuestion,
     x_frp_local_token: str | None = Header(default=None),
 ) -> dict:
-    """M2a: dev-only question -> retrieval -> verified cells -> policy."""
+    """M2a/M3: dev-only question -> retrieval -> verified cells -> policy."""
     _require_facts_report_access(report_key, x_frp_local_token)
     pdf_path = _facts_report_pdf_path(report_key)
 
@@ -619,11 +688,89 @@ def local_facts_report_ask(
     from zoneinfo import ZoneInfo
     from app.modules.financial_report_analyst import report_builder
 
+    as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
+    try:
+        result = report_builder.build_report_from_question(
+            report_key, Path(pdf_path), request.question, as_of=as_of,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Question report unavailable")
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+    if (result.get("status") == "REPORT_WITHHELD"
+            and result.get("reason") == "NO_ROW_MATCH"):
+        statement_kind = (result.get("selection") or {}).get("trace", {}).get("statement_kind")
+        if statement_kind:
+            clarification = _attempt_clarification(
+                report_key, pdf_path, request.question,
+                statement_kind=statement_kind, as_of=as_of,
+            )
+            if clarification is not None:
+                return clarification
+    return result
+
+
+@app.post("/api/v1/research/reports/{report_key}/ask/resolve")
+@_serialize_pdf_route
+def local_facts_report_resolve(
+    report_key: str,
+    request: LocalClarificationResolveRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    """Resume a clarification: the chosen option is re-verified, never trusted."""
+    _require_facts_report_access(report_key, x_frp_local_token)
+    pdf_path = _facts_report_pdf_path(report_key)
+
+    from datetime import datetime
+    from hashlib import sha256
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.evidence import corpus_manifest, document_index
+    from app.modules.financial_report_analyst import (
+        clarification, question_selection, report_builder, source_workspace,
+    )
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    entry = source_workspace.REPORTS[report_key]
+    secret = clarification._secret(
+        os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    )
+    try:
+        payload = clarification.verify_clarification(request.clarification_id, secret)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Clarification unavailable") from None
+
+    if (payload.get("document_id") != document.document_id
+            or payload.get("canonical_sha256") != document.canonical_sha256
+            or payload.get("question_sha256")
+                != sha256(request.question.encode("utf-8")).hexdigest()
+            or request.option_id not in payload.get("option_ids", [])):
+        raise HTTPException(status_code=422, detail="Clarification unavailable")
+
+    try:
+        index = document_index.index_document_scoped(
+            entry.source, Path(pdf_path),
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+            section_kinds=frozenset(question_selection.INCOME_STATEMENT_KINDS),
+        )
+        closed = clarification.closed_options(index, document, payload["statement_kind"])
+    except Exception:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+    option = next((o for o in closed if o["option_id"] == request.option_id), None)
+    if option is None:
+        raise HTTPException(status_code=422, detail="Clarification unavailable")
+
     try:
         return report_builder.build_report_from_question(
             report_key, Path(pdf_path), request.question,
             as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+            forced_selection={
+                "statement_kind": option["statement_kind"],
+                "row_label": option["row_label"],
+                "core": option["core"],
+            },
         )
     except Exception:
-        logging.getLogger(__name__).exception("Question report unavailable")
+        logging.getLogger(__name__).exception("Resolve report unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None

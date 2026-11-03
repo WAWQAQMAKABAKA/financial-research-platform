@@ -125,6 +125,24 @@ type WithheldReport = {
   };
 };
 
+type Clarification = {
+  status: "CLARIFICATION_REQUIRED";
+  reason: string;
+  question: string;
+  clarification_id: string;
+  option_basis: string;
+  options: {
+    option_id: string;
+    row_label: string;
+    core: string;
+    statement_kind: string;
+    statement_title: string;
+  }[];
+  interpretation: { status: string; rationale: string | null } | null;
+  financial_semantic_review: string;
+  research_publication: string;
+};
+
 const REASONS: Record<string, string> = {
   NO_ROW_MATCH: "问题没有匹配到该报表中的任何行项目。",
   NO_STATEMENT_SCOPE: "问题未指明报表范围，或检索未找到利润表。",
@@ -205,6 +223,16 @@ function isWithheld(value: unknown): value is WithheldReport {
   if (typeof value !== "object" || value === null) return false;
   const report = value as WithheldReport;
   return report.status === "REPORT_WITHHELD" && typeof report.reason === "string";
+}
+
+function isClarification(value: unknown): value is Clarification {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as Clarification;
+  return (
+    c.status === "CLARIFICATION_REQUIRED" &&
+    typeof c.clarification_id === "string" &&
+    Array.isArray(c.options) && c.options.length >= 2
+  );
 }
 
 function ClosedNotice({ reason }: { reason: string }) {
@@ -315,8 +343,38 @@ function FactCard({ fact }: { fact: Fact }) {
   );
 }
 
+function ClarificationBody({ clarification }: { clarification: Clarification }) {
+  return (
+    <>
+      <section className={styles.boundary} aria-label="需要澄清">
+        <strong>需要澄清 · 请选择指标</strong>
+        <p>问题中的指标在原文里对应多个行项目，选择后继续核验并生成事实报告。</p>
+        {clarification.interpretation?.rationale ? (
+          <p className={styles.muted}>解释（模型提议，未核验）：{clarification.interpretation.rationale}</p>
+        ) : null}
+        <p className={styles.muted}>选项来源：{clarification.option_basis} · 不展示任何金额。</p>
+      </section>
+      <section className={styles.clarifyOptions} aria-label="指标选项">
+        {clarification.options.map((option) => {
+          const href =
+            `/research/reports/${REPORT_KEY}?q=${encodeURIComponent(clarification.question)}` +
+            `&clarification_id=${encodeURIComponent(clarification.clarification_id)}` +
+            `&option_id=${encodeURIComponent(option.option_id)}`;
+          return (
+            <a key={option.option_id} className={styles.clarifyOption} href={href}>
+              <strong>{option.core}</strong>
+              <span>{option.statement_title} · {compact(option.row_label)}</span>
+            </a>
+          );
+        })}
+      </section>
+      <p className={styles.muted}>研究发布：已阻止 · 财务语义核验：未进行</p>
+    </>
+  );
+}
+
 async function ReportBody({ searchParams }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; clarification_id?: string | string[]; option_id?: string | string[] }>;
 }) {
   const issue = devAccessIssue(process.env);
   if (issue !== null) {
@@ -326,32 +384,50 @@ async function ReportBody({ searchParams }: {
   const params = await searchParams;
   const raw = typeof params.q === "string" ? params.q.trim().slice(0, 240) : "";
   const askedQuestion = raw.length > 0 ? raw : null;
+  const clarificationId =
+    typeof params.clarification_id === "string" ? params.clarification_id : null;
+  const optionId = typeof params.option_id === "string" ? params.option_id : null;
+  const resolving = clarificationId !== null && optionId !== null && askedQuestion !== null;
 
   const base = process.env.RESEARCH_API_BASE_URL ?? "http://127.0.0.1:8000";
   const token = process.env.FRP_LOCAL_LLM_ACCESS_TOKEN ?? "";
-  const endpoint = askedQuestion === null
-    ? `${base}/api/v1/research/reports/${REPORT_KEY}`
-    : `${base}/api/v1/research/reports/${REPORT_KEY}/ask`;
+  const endpoint = resolving
+    ? `${base}/api/v1/research/reports/${REPORT_KEY}/ask/resolve`
+    : askedQuestion === null
+      ? `${base}/api/v1/research/reports/${REPORT_KEY}`
+      : `${base}/api/v1/research/reports/${REPORT_KEY}/ask`;
 
   let report: Report | null = null;
   let withheld: WithheldReport | null = null;
+  let clarification: Clarification | null = null;
   try {
+    const method = askedQuestion === null ? "GET" : "POST";
+    const headers: Record<string, string> = askedQuestion === null
+      ? { "x-frp-local-token": token }
+      : { "content-type": "application/json", "x-frp-local-token": token };
+    const body = askedQuestion === null
+      ? undefined
+      : JSON.stringify(
+          resolving
+            ? { question: askedQuestion, clarification_id: clarificationId, option_id: optionId }
+            : { question: askedQuestion },
+        );
     const response = await fetch(endpoint, {
-      method: askedQuestion === null ? "GET" : "POST",
-      cache: "no-store",
-      headers: askedQuestion === null
-        ? { "x-frp-local-token": token }
-        : { "content-type": "application/json", "x-frp-local-token": token },
-      body: askedQuestion === null ? undefined : JSON.stringify({ question: askedQuestion }),
+      method, cache: "no-store", headers, body,
       signal: AbortSignal.timeout(120_000),
     });
     if (response.ok) {
       const payload: unknown = await response.json();
       if (isReport(payload)) report = payload;
       else if (isWithheld(payload)) withheld = payload;
+      else if (isClarification(payload)) clarification = payload;
     }
   } catch {
     report = null;
+  }
+
+  if (clarification !== null) {
+    return <ClarificationBody clarification={clarification} />;
   }
 
   if (withheld !== null) {

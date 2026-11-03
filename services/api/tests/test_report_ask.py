@@ -204,3 +204,19 @@ def test_profit_synonym_is_not_mapped_and_publishes_nothing():
     assert result["reason"] == "NO_ROW_MATCH"
     assert result["facts"] == []
 
+
+
+def test_forced_selection_resolves_attributable_net_profit():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(), "公司上半年的净利是多少？", as_of=AS_OF,
+        forced_selection={
+            "statement_kind": "consolidated_income_statement",
+            "row_label": "1.归属于母公司股东的净利润（净亏损以“-”号填列）",
+            "core": "归属于母公司股东的净利润",
+        },
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert len(result["facts"]) == 1
+    assert result["facts"][0]["value_verbatim"] == "473,065,863.24"
+    assert result["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_METRIC"

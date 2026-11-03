@@ -81,3 +81,9 @@
   .hits li{grid-template-columns:1fr}
   .askRow button{width:100%}
 }
+
+.clarifyOptions{display:grid;gap:10px;margin:0 0 16px}
+.clarifyOption{display:flex;flex-direction:column;gap:5px;background:#fff;border:1px solid #cfe0e3;border-radius:12px;padding:16px 18px;text-decoration:none;color:#1b3441;transition:border-color .12s}
+.clarifyOption:hover{border-color:#4a8585;background:#f5fafb}
+.clarifyOption strong{font-size:15px;color:#174a56}
+.clarifyOption span{font-size:12px;color:#647c85;line-height:1.7}
