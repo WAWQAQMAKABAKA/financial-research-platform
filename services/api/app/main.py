@@ -709,15 +709,20 @@ def local_facts_report_ask(
     pdf_path = _facts_report_pdf_path(report_key)
 
     from datetime import datetime
+    from hashlib import sha256
     from pathlib import Path
     from zoneinfo import ZoneInfo
     from app.modules.financial_report_analyst import evidence_plan, report_builder
 
     as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
+    repair_secret = sha256(
+        os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "").encode("utf-8")
+    ).hexdigest()
     try:
         if len(evidence_plan.split_facets(request.question)) >= 2:
             result = report_builder.build_multi_report(
                 report_key, Path(pdf_path), request.question, as_of=as_of,
+                repair_secret=repair_secret,
             )
             if result is None:
                 result = report_builder.build_report_from_question(
@@ -831,6 +836,20 @@ def local_facts_report_resolve(
     option = next((o for o in closed if o["option_id"] == request.option_id), None)
     if option is None:
         raise HTTPException(status_code=422, detail="Clarification unavailable")
+
+    if payload.get("multi") and payload.get("facet"):
+        try:
+            repaired = report_builder.build_multi_report(
+                report_key, Path(pdf_path), request.question, as_of=now,
+                pinned_rows={payload["facet"]: option["row_label"]},
+                repair_secret=None,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Repair report unavailable")
+            raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+        if repaired is None:
+            raise HTTPException(status_code=422, detail="Clarification unavailable")
+        return repaired
 
     try:
         return report_builder.build_report_from_question(

@@ -279,3 +279,17 @@ def test_multi_requirement_comparison_is_blocked():
     assert result["status"] == "REPORT_WITHHELD"
     assert result["reason"] == "COMPARISON_NOT_PUBLISHABLE"
     assert result["facts"] == []
+
+
+def test_multi_report_offers_a_bounded_repair_for_the_missing_facet():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入和研发投入分别是多少？",
+        as_of=AS_OF, repair_secret="secret",
+    )
+
+    repair = result["coverage"].get("repair")
+    assert repair is not None
+    assert repair["facet"] == "研发投入"
+    assert "研发费用" in {option["core"] for option in repair["options"]}
+    assert repair["clarification_id"]

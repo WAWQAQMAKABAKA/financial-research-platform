@@ -38,10 +38,22 @@ statement-scope clarification is offered instead of planning.
 Route selection: `POST /reports/{key}/ask` checks `split_facets`; two or more
 facets use `build_multi_report`, otherwise the single-fact path is unchanged.
 
-## Deliberately not implemented in v1
+## Bounded repair (v1)
 
-- **Bounded repair.** No retry loop is performed. A missing facet is reported,
-  not re-queried. A repair pass needs its own evidence standard and evaluation.
+A partial report may carry one optional repair suggestion for the first missing
+requirement. The candidates are the verified rows of the same statement that
+share a rare lexical bigram with the missing facet; a signed, expiring token is
+returned with them. Nothing is published from the suggestion: the user chooses a
+row, the report is rebuilt with that row pinned, and the row still goes through
+location, literal review and the policy. There is no automatic statement switch
+and no second repair round. If no candidate matches, the partial report is
+returned unchanged.
+
+This is a user-confirmed lexical repair, not semantic equivalence: "研发投入" may
+be offered "研发费用" as a candidate, and the user decides.
+
+## Deliberately not implemented
+
 - Multi-source requirements (management discussion text) and cross-page
   assembly beyond the table index.
 - Comparisons, causal explanations, forecasts and any inferential composition.

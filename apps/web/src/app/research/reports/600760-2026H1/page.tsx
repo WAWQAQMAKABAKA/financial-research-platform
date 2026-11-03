@@ -85,6 +85,19 @@ type CoverageRequirement = {
   row_label?: string | null;
 };
 
+type RepairOption = {
+  option_id: string;
+  row_label: string;
+  core: string;
+};
+
+type CoverageRepair = {
+  facet: string;
+  reason: string;
+  clarification_id: string;
+  options: RepairOption[];
+};
+
 type Coverage = {
   complete: boolean;
   total: number;
@@ -92,6 +105,7 @@ type Coverage = {
   statement_kind: string;
   selection_basis: string;
   requirements: CoverageRequirement[];
+  repair?: CoverageRepair;
 };
 
 type Report = {
@@ -520,6 +534,28 @@ async function ReportBody({ searchParams }: {
                   </li>
                 ))}
               </ul>
+              {report.coverage.repair && (
+                <div className={styles.repairBlock}>
+                  <p className={styles.muted}>
+                    补充缺失条目「{report.coverage.repair.facet}」：选择一个已核验行继续。
+                  </p>
+                  <div className={styles.clarifyOptions}>
+                    {report.coverage.repair.options.map((option) => {
+                      const href =
+                        `/research/reports/${REPORT_KEY}` +
+                        `?q=${encodeURIComponent(report.request.question)}` +
+                        `&clarification_id=${encodeURIComponent(report.coverage!.repair!.clarification_id)}` +
+                        `&option_id=${encodeURIComponent(option.option_id)}`;
+                      return (
+                        <a key={option.option_id} className={styles.clarifyOption} href={href}>
+                          <strong>{option.core}</strong>
+                          <span>{compact(option.row_label)}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 

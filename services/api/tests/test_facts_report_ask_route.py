@@ -264,3 +264,27 @@ def test_multi_fact_question_returns_coverage(monkeypatch):
     assert report["report_type"] == "FACTS_ONLY_MULTI_REQUIREMENT_REPORT"
     assert len(report["facts"]) == 2
     assert report["coverage"]["complete"] is True
+
+
+def test_partial_multi_repair_roundtrip(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+    question = "600760 中航沈飞 2026 年半年度合并利润表中营业收入和研发投入分别是多少？"
+
+    asked = TestClient(app).post(ASK_URL, json={"question": question}, headers=headers)
+    assert asked.status_code == 200
+    partial = asked.json()
+    assert partial["status"] == "REPORT_READY"
+    assert partial["coverage"]["complete"] is False
+    repair = partial["coverage"]["repair"]
+    assert repair["facet"] == "研发投入"
+    option = next(o for o in repair["options"] if o["core"] == "研发费用")
+
+    resolved = resolve(question, repair["clarification_id"], option["option_id"])
+    assert resolved.status_code == 200
+    report = resolved.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["coverage"]["complete"] is True
+    assert "59,650,843.12" in {fact["value_verbatim"] for fact in report["facts"]}

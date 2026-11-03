@@ -51,6 +51,7 @@ def plan_requirements(
     report_period: str,
     column_header: str,
     retrieval_hits: list[dict] | None = None,
+    pinned_rows: dict[str, str] | None = None,
 ) -> dict | None:
     """Return a plan, a scope-ambiguity signal, or None for single-fact questions."""
     facets = split_facets(question)
@@ -86,6 +87,15 @@ def plan_requirements(
 
     requirements = []
     for number, facet in enumerate(facets, start=1):
+        pinned = (pinned_rows or {}).get(facet)
+        if pinned:
+            requirements.append({
+                "requirement_id": f"R{number}", "facet": facet,
+                "status": "SATISFIED",
+                "row": {"row_label": pinned, "core": qs.row_label_core(pinned),
+                        "match_chars": len(qs.row_label_core(pinned))},
+            })
+            continue
         selection = qs.select_cells(
             index, question=facet, report_period=report_period,
             column_header=column_header, retrieval_hits=[],

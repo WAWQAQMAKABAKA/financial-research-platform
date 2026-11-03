@@ -27,6 +27,7 @@ from app.modules.financial_report_analyst.contracts import (
 )
 from app.modules.financial_report_analyst import (
     canonical_retrieval,
+    clarification,
     evidence_plan,
     intent_gate,
     publication_policy,
@@ -625,6 +626,8 @@ def build_multi_report(
     question: str,
     *,
     as_of: datetime,
+    pinned_rows: dict[str, str] | None = None,
+    repair_secret: str | None = None,
 ) -> dict | None:
     """Two or three independent facts -> requirements -> coverage -> policy.
 
@@ -693,6 +696,7 @@ def build_multi_report(
     plan = evidence_plan.plan_requirements(
         index, question=question, report_period=document.report_period,
         column_header=column_header, retrieval_hits=retrieval_trace["hits"],
+        pinned_rows=pinned_rows,
     )
     if plan is None:
         return None
@@ -906,6 +910,42 @@ def build_multi_report(
         "selection_basis": plan["selection_basis"],
         "requirements": requirement_rows,
     }
+
+    # Bounded repair: at most one optional clarification for the first missing
+    # requirement. It never publishes on its own; the user confirms a verified
+    # source row and the report is rebuilt with that row pinned.
+    if (not coverage["complete"] and repair_secret and not pinned_rows):
+        missing = next(
+            (item for item in requirement_rows
+             if item["status"] in {"NO_ROW_MATCH", "AMBIGUOUS"}),
+            None,
+        )
+        if missing is not None:
+            closed = clarification.closed_options(
+                index, document, plan["statement_kind"],
+            )
+            candidates = clarification.near_match_options(closed, missing["facet"])
+            if 1 <= len(candidates) <= 4:
+                repair_token = clarification.sign_clarification(
+                    question=question, document=document, report_key=report_key,
+                    statement_kind=plan["statement_kind"],
+                    option_ids=[option["option_id"] for option in candidates],
+                    secret=repair_secret,
+                    extra={"multi": True, "facet": missing["facet"]},
+                )
+                coverage["repair"] = {
+                    "facet": missing["facet"],
+                    "reason": "MISSING_REQUIREMENT_CANDIDATES",
+                    "clarification_id": repair_token,
+                    "options": [
+                        {
+                            "option_id": option["option_id"],
+                            "row_label": option["row_label"],
+                            "core": option["core"],
+                        }
+                        for option in candidates
+                    ],
+                }
 
     source = document.to_source_document()
     question_sha = sha256(question.encode("utf-8")).hexdigest()

@@ -118,7 +118,8 @@ def _secret(env_token: str) -> str:
 def sign_clarification(*, question: str, document: CorpusDocument,
                        report_key: str, statement_kind: str | None,
                        option_ids: list[str], secret: str,
-                       kind: str = "METRIC_IDENTITY") -> str:
+                       kind: str = "METRIC_IDENTITY",
+                       extra: dict | None = None) -> str:
     payload = {
         "v": TOKEN_VERSION,
         "kind": kind,
@@ -129,6 +130,7 @@ def sign_clarification(*, question: str, document: CorpusDocument,
         "statement_kind": statement_kind,
         "option_ids": sorted(option_ids),
         "issued_at": int(time.time()),
+        **(extra or {}),
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     mac = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
