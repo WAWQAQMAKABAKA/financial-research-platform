@@ -141,6 +141,9 @@ const REASONS: Record<string, string> = {
   QUESTION_INVALID: "问题格式无效。",
   RETRIEVAL_NOT_READY: "检索未返回可用的原文候选。",
   PUBLICATION_WITHHELD: "发布策略拒绝了该报告。",
+  COMPARISON_NOT_PUBLISHABLE: "比较类问题不在本报告的发布范围内，本报告只发布披露事实。",
+  FORWARD_VIEW_NOT_PUBLISHABLE: "前瞻或预测类问题不在本报告的发布范围内。",
+  QUESTION_INTENT_AMBIGUOUS: "无法确定这是一个披露事实查询，因此不发布。",
 };
 
 function reasonText(reason: string): string {
