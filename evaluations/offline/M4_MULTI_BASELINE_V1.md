@@ -69,10 +69,27 @@ ten expected cells.
 - A title-less multi-fact question with matching rows in both statements goes to
   statement-scope clarification instead of guessing.
 
+## v2 — bounded repair (`14c3f63`)
+
+Same frozen 8-case set and runtime, with the optional repair suggestion:
+
+- M4-03 (`营业收入` + `研发投入`) now returns `coverage.repair = {facet: 研发投入,
+  option_cores: [研发费用], token_present: true}`;
+- the partial report itself is unchanged (1 fact, `complete = false`);
+- confirming 研发费用 rebuilds a complete 2/2 report with `59,650,843.12`
+  (route test `test_partial_multi_repair_roundtrip`);
+- one repair round only, no automatic statement switch, no publication from the
+  suggestion.
+
+Scorecard unchanged: correct 8/8, unsafe 0, false-sufficient 0, coverage recall
+1.0, missing-status accuracy 1.0, latency 8.2 s avg.
+
 ## Limitations
 
 - Single document, 8 author-curated cases; not a holdout.
-- **No bounded repair**: a missing requirement is reported, never re-queried.
+- Bounded repair is one optional, user-confirmed clarification per partial
+  report; there is no retry loop, no automatic statement switch and no
+  publication without the user's choice.
 - At most three facets; longer questions fall back to the single-fact path.
 - Only income-statement amounts; no management-discussion requirements,
   cross-page assembly, comparisons or inferences.
@@ -81,7 +98,6 @@ ten expected cells.
 
 ## Next
 
-1. Bounded repair (one alternative query per missing requirement, budgeted and
-   traced) with its own evaluation.
-2. Optional LLM requirement proposal, validated against the same closed row set.
-3. Management-text requirements as a separate evidence kind.
+1. Optional LLM requirement proposal, validated against the same closed row set.
+2. Management-text requirements as a separate evidence kind.
+3. A repair-specific evaluation set (candidate quality and confirmation cost).

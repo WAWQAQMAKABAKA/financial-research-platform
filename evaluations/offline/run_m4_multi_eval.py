@@ -202,6 +202,12 @@ def capture(args: argparse.Namespace) -> int:
                  "reason": item.get("reason")}
                 for item in coverage.get("requirements", [])
             ],
+            "repair": None if not coverage.get("repair") else {
+                "facet": coverage["repair"].get("facet"),
+                "option_cores": [option.get("core")
+                                 for option in coverage["repair"].get("options", [])],
+                "token_present": bool(coverage["repair"].get("clarification_id")),
+            },
         }
         record["clarification"] = None
         if payload.get("status") == "CLARIFICATION_REQUIRED":
