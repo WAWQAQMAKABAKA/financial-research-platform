@@ -133,3 +133,74 @@ def test_empty_question_is_invalid():
 
     assert result["status"] == "REPORT_WITHHELD"
     assert result["reason"] == "QUESTION_INVALID"
+
+def test_comparison_question_is_blocked_before_selection():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(),
+        "中航沈飞2026年半年度合并利润表中营业收入比去年增长多少？", as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "COMPARISON_NOT_PUBLISHABLE"
+    assert result["facts"] == []
+    assert result["intent"]["value"] == "COMPARISON"
+    assert "retrieval" not in result
+
+
+def test_forecast_question_is_blocked_before_selection():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(),
+        "中航沈飞2026全年合并利润表中营业收入预计多少？", as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "FORWARD_VIEW_NOT_PUBLISHABLE"
+    assert result["facts"] == []
+
+
+def test_ambiguous_question_is_blocked_before_selection():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(), "中航沈飞2026年半年度经营情况如何？", as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "QUESTION_INTENT_AMBIGUOUS"
+    assert result["facts"] == []
+
+def test_attributable_net_profit_question_publishes_only_that_row():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(),
+        "中航沈飞2026年半年度合并利润表中归属于母公司股东的净利润是多少？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert len(result["facts"]) == 1
+    assert result["facts"][0]["row_label"].startswith("1.归属于母公司股东的净利润")
+    assert result["facts"][0]["value_verbatim"] == "473,065,863.24"
+    assert result["selection"]["trace"]["specificity_dropped"] == ["净利润"]
+
+
+def test_revenue_synonym_publishes_the_literal_row():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(),
+        "中航沈飞2026年半年度合并利润表的营收是多少？", as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert result["facts"][0]["row_label"] == "其中：营业收入"
+    assert result["selection"]["trace"]["synonyms_applied"] == [
+        {"alias": "营收", "canonical": "营业收入"}
+    ]
+
+
+def test_profit_synonym_is_not_mapped_and_publishes_nothing():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(),
+        "中航沈飞2026年半年度合并利润表的净利是多少？", as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "NO_ROW_MATCH"
+    assert result["facts"] == []
+

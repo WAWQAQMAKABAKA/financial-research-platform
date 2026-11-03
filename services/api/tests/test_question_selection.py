@@ -57,6 +57,7 @@ def income_statement_index() -> dict:
         ["其中：营业成本", "", "5,535,215,299.31", "12,882,118,507.83"],
         ["三、营业利润（亏损以“-”号填列）", "", "565,393,924.81", "1,746,218,560.77"],
         ["五、净利润（净亏损以“-”号填列）", "", "468,144,459.10", "1,504,332,090.00"],
+        ["1.归属于母公司股东的净利润（净亏损以“-”号填列）", "", "473,065,863.24", "1,136,413,283.86"],
     ])
     parent = section("parent_income_statement", 2, [
         HEADER,
@@ -159,3 +160,38 @@ def test_row_core_strips_enumeration_and_annotations():
     assert qs.row_label_core("减：营业成本") == "营业成本"
     assert qs.row_label_core("1.归属于母公司股东的净利润（净亏损以“-”号填列）") == "归属于母公司股东的净利润"
     assert qs.row_label_core("（一）基本每股收益(元/股)") == "基本每股收益"
+
+def test_attributable_profit_does_not_publish_generic_net_profit():
+    out = select("2026年半年度合并利润表中归属于母公司股东的净利润是多少？")
+
+    assert out["status"] == "SELECTION_READY"
+    assert [row["row_label"] for row in out["rows"]] == [
+        "1.归属于母公司股东的净利润（净亏损以“-”号填列）"
+    ]
+    assert "净利润" in out["trace"]["specificity_dropped"]
+
+
+def test_generic_net_profit_does_not_reach_attributable_row():
+    out = select("2026年半年度合并利润表中净利润是多少？")
+
+    assert out["status"] == "SELECTION_READY"
+    assert [row["row_label"] for row in out["rows"]] == ["五、净利润（净亏损以“-”号填列）"]
+
+
+def test_revenue_synonym_is_normalized_for_matching_only():
+    out = select("2026年半年度合并利润表的营收是多少？")
+
+    assert out["status"] == "SELECTION_READY"
+    assert [row["row_label"] for row in out["rows"]] == ["其中：营业收入"]
+    assert out["trace"]["synonyms_applied"] == [
+        {"alias": "营收", "canonical": "营业收入"}
+    ]
+
+
+def test_profit_synonym_is_not_auto_mapped():
+    out = select("2026年半年度合并利润表的净利是多少？")
+
+    assert out["status"] == "SELECTION_WITHHELD"
+    assert out["reason"] == "NO_ROW_MATCH"
+    assert out["trace"]["synonyms_applied"] == []
+

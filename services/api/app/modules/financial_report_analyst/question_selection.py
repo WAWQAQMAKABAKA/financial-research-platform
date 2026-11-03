@@ -41,11 +41,29 @@ _ROW_PREFIX = re.compile(
 _ROW_ANNOTATION = re.compile(r"[（(][^（）()]*[)）]$")
 _YEAR = re.compile(r"(?:19|20)\d{2}")
 
+SYNONYM_VERSION = "m2a-synonym-v1"
+# Audited and deliberately tiny. Normalization is a candidate-retrieval aid
+# only: the selected row label stays verbatim, and publication still requires
+# the literal review and the policy. 净利 is intentionally absent because it is
+# ambiguous between 净利润 and 归属于母公司股东的净利润.
+SYNONYMS = (("营收", "营业收入"),)
+
 
 def _norm(value: object) -> str:
     if not isinstance(value, str):
         return ""
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value))
+
+
+def normalize_question(question: str) -> tuple[str, list[dict]]:
+    """Apply the audited alias table for matching only."""
+    text = _norm(question)
+    applied: list[dict] = []
+    for alias, canonical in SYNONYMS:
+        if alias in text:
+            text = text.replace(alias, canonical)
+            applied.append({"alias": alias, "canonical": canonical})
+    return text, applied
 
 
 def row_label_core(label: str) -> str:
@@ -162,6 +180,7 @@ def select_cells(
     statement-scope tie; they never select a row.
     """
     question_norm = _norm(question)
+    normalized_question, synonyms = normalize_question(question_norm)
     trace: dict = {
         "version": SELECTION_VERSION,
         "question": question,
@@ -170,6 +189,9 @@ def select_cells(
         "retrieval_pages": [hit.get("page_number") for hit in (retrieval_hits or [])],
         "row_labels_considered": 0,
         "row_candidates": [],
+        "synonyms_applied": synonyms,
+        "synonym_version": SYNONYM_VERSION,
+        "normalized_question": normalized_question if synonyms else question_norm,
     }
 
     if not question_norm or len(question) < 2:
@@ -211,7 +233,7 @@ def select_cells(
         core = row_label_core(label)
         if len(core) < 2:
             continue
-        if core in question_norm:
+        if core in normalized_question:
             matches.append({"row_label": label, "core": core, "match_chars": len(core)})
 
     matches.sort(key=lambda item: (-item["match_chars"], item["row_label"]))
@@ -219,6 +241,21 @@ def select_cells(
         {"row_label": item["row_label"], "core": item["core"]}
         for item in matches
     ]
+
+    # P1: financial metric specificity, not raw string length. A matched row
+    # whose core is contained in another matched row's core is a less specific
+    # reading of the same question and is dropped. A generic question such as
+    # "净利润" still cannot reach "归属于母公司股东的净利润", because that
+    # longer core is not contained in the question at all.
+    if len(matches) > 1:
+        cores = [item["core"] for item in matches]
+        kept = [
+            item for item in matches
+            if not any(item["core"] != other and item["core"] in other for other in cores)
+        ]
+        dropped = [item["core"] for item in matches if item not in kept]
+        trace["specificity_dropped"] = dropped
+        matches = kept
 
     if not matches:
         return _withheld("NO_ROW_MATCH", trace)

@@ -27,6 +27,7 @@ from app.modules.financial_report_analyst.contracts import (
 )
 from app.modules.financial_report_analyst import (
     canonical_retrieval,
+    intent_gate,
     publication_policy,
     question_selection,
     revenue_scope,
@@ -320,6 +321,18 @@ def build_report_from_question(
     path = Path(pdf_path)
     corpus_manifest.verify_document(document, pdf_path=path)
 
+    # P0: a comparison, forecast or unclassifiable question never reaches
+    # retrieval, selection or publication, even if it contains a row's words.
+    intent = intent_gate.classify_intent(question)
+    intent_block = {"value": intent.value, "version": intent_gate.INTENT_VERSION}
+    if intent is not intent_gate.Intent.FACT_LOOKUP:
+        return _withheld(
+            report_key, str(intent_gate.rejection_reason(intent)),
+            document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
     try:
         retrieval = canonical_retrieval.retrieve_report_evidence(
             entry.source, path, question, as_of=as_of,
@@ -555,6 +568,7 @@ def build_report_from_question(
             "authorization_note": document.authorization_note,
         },
         "request": {"question": question, "question_code": QUESTION_CODE},
+        "intent": intent_block,
         "retrieval": _retrieval_trace(retrieval, include_excerpts=True),
         "selection": selection_trace,
         "facts": facts,
