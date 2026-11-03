@@ -92,7 +92,8 @@ def decide_publication(
     document: CorpusDocument,
     *,
     expected_statement_kind: str,
-    expected_row_label: str,
+    expected_row_label: str | None = None,
+    expected_row_labels: tuple[str, ...] | None = None,
     as_of: datetime,
     verify_evidence=None,
 ) -> dict:
@@ -101,7 +102,19 @@ def decide_publication(
     ``verify_evidence(evidence_id) -> bool`` may be supplied by the caller to
     re-check the canonical span against the source text. Without it, the policy
     still requires the literal reviewer's ADMIT and the span status flags.
+
+    ``expected_row_labels`` allows a retrieval-derived selection to publish more
+    than one literal row. Each published claim must still match one of the
+    supplied labels exactly (whitespace-normalized); the policy never accepts a
+    label the caller did not ask for.
     """
+    expected_labels = (
+        tuple(expected_row_labels) if expected_row_labels is not None
+        else (() if expected_row_label is None else (expected_row_label,))
+    )
+    if not expected_labels:
+        return _withheld("EXPECTED_SELECTION_MISSING")
+
     if not isinstance(draft, dict) or draft.get("status") != "SOURCE_DRAFT_READY":
         return _withheld("SOURCE_DRAFT_NOT_READY")
 
@@ -182,7 +195,8 @@ def decide_publication(
         # Category linkage: the row/statement actually selected for this report.
         if (
             observation.get("statement_type_candidate") != expected_statement_kind
-            or _norm(observation.get("row_label")) != _norm(expected_row_label)
+            or _norm(observation.get("row_label"))
+                not in {_norm(label) for label in expected_labels}
             or _norm(observation.get("column_header")) != _norm(expected_column)
         ):
             return _withheld("SELECTION_MISMATCH", claim_id)

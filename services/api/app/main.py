@@ -549,6 +549,35 @@ def local_retrieval_analyst(
 # M1: one local, dev-only facts-only disclosure report. No persistence, no
 # model, and no production exposure. Publication is decided by
 # publication_policy from the verified draft, not by this route.
+class LocalFactsQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=2, max_length=240)
+
+
+def _require_facts_report_access(report_key: str, token: str | None) -> None:
+    """Shared dev-only gate: production refusal, feature flag, local secret."""
+    if os.environ.get("FRP_ENV", "").strip().casefold() in {
+        "production", "prod", "staging",
+    }:
+        raise HTTPException(status_code=404, detail="Not available")
+    if os.environ.get("FRP_LOCAL_FACTS_REPORT") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+    expected = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (len(expected) < 32 or not token
+            or not compare_digest(expected, token)):
+        raise HTTPException(status_code=404, detail="Not available")
+    from app.modules.financial_report_analyst import report_builder
+    if report_key not in report_builder.supported_report_keys():
+        raise HTTPException(status_code=404, detail="Report not available")
+
+
+def _facts_report_pdf_path(report_key: str) -> str:
+    pdf_path = os.environ.get(f"FRP_LOCAL_SOURCE_PDF_{report_key.split('-')[0]}")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+    return pdf_path
+
+
 @app.get("/api/v1/research/reports/{report_key}")
 @_serialize_pdf_route
 def local_facts_report(
@@ -556,27 +585,13 @@ def local_facts_report(
     x_frp_local_token: str | None = Header(default=None),
 ) -> dict:
     """Dev-only facts-only report; the shared local secret is the gate."""
-    if os.environ.get("FRP_ENV", "").strip().casefold() in {
-        "production", "prod", "staging",
-    }:
-        raise HTTPException(status_code=404, detail="Not available")
-    if os.environ.get("FRP_LOCAL_FACTS_REPORT") != "1":
-        raise HTTPException(status_code=404, detail="Not available")
-    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
-    if (len(token) < 32 or not x_frp_local_token
-            or not compare_digest(token, x_frp_local_token)):
-        raise HTTPException(status_code=404, detail="Not available")
+    _require_facts_report_access(report_key, x_frp_local_token)
+    pdf_path = _facts_report_pdf_path(report_key)
 
     from datetime import datetime
     from pathlib import Path
     from zoneinfo import ZoneInfo
     from app.modules.financial_report_analyst import report_builder
-
-    if report_key not in report_builder.supported_report_keys():
-        raise HTTPException(status_code=404, detail="Report not available")
-    pdf_path = os.environ.get(f"FRP_LOCAL_SOURCE_PDF_{report_key.split('-')[0]}")
-    if not pdf_path:
-        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
 
     try:
         return report_builder.build_report(
@@ -585,4 +600,30 @@ def local_facts_report(
         )
     except Exception:
         logging.getLogger(__name__).exception("Facts-only report unavailable")
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+
+@app.post("/api/v1/research/reports/{report_key}/ask")
+@_serialize_pdf_route
+def local_facts_report_ask(
+    report_key: str,
+    request: LocalFactsQuestion,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    """M2a: dev-only question -> retrieval -> verified cells -> policy."""
+    _require_facts_report_access(report_key, x_frp_local_token)
+    pdf_path = _facts_report_pdf_path(report_key)
+
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import report_builder
+
+    try:
+        return report_builder.build_report_from_question(
+            report_key, Path(pdf_path), request.question,
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Question report unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
