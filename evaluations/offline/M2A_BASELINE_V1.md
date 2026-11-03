@@ -1,11 +1,12 @@
 # M2a Track A — 600760 cell-level baseline (v1)
 
-**Status: FAIL on the safety gate.** Two expected-rejection questions published a
-fact, and one question published an extra row. The frozen set was not changed.
+**Status: v1 FAIL on the safety gate; v2 (P0/P1/P2) 0 unsafe, 0 wrong-cell.**
+v1 published a fact for two expected-rejection questions and one extra row.
+The frozen set was not changed between v1 and v2.
 
 - Questions SHA-256: `b7e2db373d021355e107ca335ce17207ecb3c75703c67bda95ec9db5f645e727`
 - Source: `600760-2026H1-cninfo-1225517994`, source `d53ee98c…`, canonical `620d3a30…`, 207 pages
-- Runtime under test: git `e558dc8` (M2a); re-run at `45dc6c3` (evaluation files only, runtime hashes unchanged) produced the same scorecard
+- Runtime: v1 `e558dc8`; v2 `721cc58` (P0/P1/P2), captured at `3bd8c92`
 - Set: 15 author-curated cases, development only, **not an independent holdout**
 - Captured trace and score: private, untracked, outside tracked files
 
@@ -107,6 +108,48 @@ error rate.
 | M2A-14 two statements | CORRECT | `AMBIGUOUS_STATEMENT_SCOPE`; no guess. |
 | M2A-15 R&D spend | CORRECT (reason differs) | Expected `NO_SOURCE_ROW`; actual `AMBIGUOUS_STATEMENT_SCOPE` because a consolidated continuation and the parent root share page 48. Expectation nuance, frozen set unchanged. |
 
+## v2 — after P0 / P1 / P2
+
+Runtime `721cc58`. Same frozen set, same SHA-256, same 15 cases, captured at
+`3bd8c92` with a clean tree.
+
+| Metric | v1 | v2 |
+|---|---|---|
+| Unsafe publications (gate) | 2 | **0** |
+| Wrong-cell publications (gate) | 1 | **0** |
+| Exact cell matches | 6/8 = 0.75 | **8/8 = 1.0** |
+| Correct rejections | 5/7 = 0.7143 | **7/7 = 1.0** |
+| False rejections | 1/8 = 0.125 | **0** |
+| Exact reason accuracy | 4/5 = 0.8 | 4/5 = 0.8 |
+| Rejection category accuracy | 3/5 = 0.6 | 5/7 = 0.7143 |
+| Citation page accuracy | 1.0 | 1.0 |
+| Retrieval page recall @1/@3/@5 | 0.625/0.75/0.75 | 0.625/0.75/0.75 |
+| Latency avg / max | 12.4 s / 16.9 s | 9.0 s / 12.2 s |
+
+What changed:
+
+- **P0 (intent gate, `intent_gate.py`)**: M2A-12 and M2A-13 are now withheld in
+  3 ms, before retrieval, with `COMPARISON_NOT_PUBLISHABLE` and
+  `FORWARD_VIEW_NOT_PUBLISHABLE`. A literal token match inside a comparison or
+  forecast can no longer publish the current-period value.
+- **P1 (specificity)**: M2A-06 publishes only the attributable row;
+  `specificity_dropped` records `["净利润"]`. A generic "净利润" question still
+  does not reach the attributable row.
+- **P2 (audited synonyms)**: M2A-10 ("营收") now selects 其中：营业收入 and
+  records `synonyms_applied`; "净利" is not mapped and still withholds.
+
+Remaining gaps, reported rather than hidden:
+
+- M2A-11 correct rejection carries `NO_ROW_MATCH`, not a metric-identity reason;
+  category accuracy counts it as a mismatch.
+- M2A-15 remains `AMBIGUOUS_STATEMENT_SCOPE` versus the recorded
+  `NO_SOURCE_ROW` expectation: a consolidated continuation and the parent root
+  share page 48. The frozen prefix is unchanged.
+- Recall@1 is still 0.625; retrieval ranking is a diagnostic input only and was
+  not changed in this round.
+- Zero unsafe publication is a gate on this development set only, not a general
+  error rate.
+
 ## What this does and does not show
 
 - The publication gate itself held: no unsafe publication came from the policy —
@@ -120,10 +163,9 @@ error rate.
 
 ## Next (not executed here)
 
-1. Intent/assertion gate before selection: reject `comparison` and `forward_view`
-   questions regardless of literal token matches.
-2. Most-specific-match precedence for overlapping row cores (归母净利润 over 净利润).
-3. Alias/metric normalization for 营收 → 营业收入, without collapsing 净利 into
-   either net-profit row.
-4. Re-run the **same frozen set** after each change and compare against this
-   scorecard. Do not edit the frozen set to make a case pass.
+1. Metric-identity reason for ambiguous aliases such as 净利, so the rejection
+   category matches the financial semantics rather than `NO_ROW_MATCH`.
+2. Retrieval ranking (recall@1 0.625): candidate quality, not publication.
+3. A true unseen set on a provisioned, independently verified second document.
+4. Re-run the **same frozen set** after every change and compare against v2.
+   Do not edit the frozen set to make a case pass.
