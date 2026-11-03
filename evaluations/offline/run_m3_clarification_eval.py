@@ -143,14 +143,37 @@ def verify_pdf(source: dict, pdf: Path) -> dict:
             "page_count": len(canonical.pages)}
 
 
-def _configure_env(pdf: Path) -> str:
+def _load_env_file(path: Path | None) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if path is None or not Path(path).is_file():
+        return values
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _configure_env(pdf: Path, *, with_llm: bool,
+                   env_file: Path | None) -> str:
     token = secrets.token_hex(32)
     os.environ["FRP_LOCAL_FACTS_REPORT"] = "1"
     os.environ["FRP_LOCAL_LLM_ACCESS_TOKEN"] = token
     os.environ["FRP_LOCAL_SOURCE_PDF_600760"] = str(pdf)
-    os.environ.pop("FRP_LOCAL_CLARIFY_LLM", None)
-    os.environ.pop("DEEPSEEK_API_KEY", None)
     os.environ.pop("FRP_ENV", None)
+    if with_llm:
+        key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if not key:
+            key = _load_env_file(env_file).get("DEEPSEEK_API_KEY", "").strip()
+        if not key:
+            raise ValueError("MODEL_NOT_CONFIGURED")
+        os.environ["DEEPSEEK_API_KEY"] = key
+        os.environ["FRP_LOCAL_CLARIFY_LLM"] = "1"
+    else:
+        os.environ.pop("FRP_LOCAL_CLARIFY_LLM", None)
+        os.environ.pop("DEEPSEEK_API_KEY", None)
     return token
 
 
@@ -172,7 +195,7 @@ def capture(args: argparse.Namespace) -> int:
     pdf = Path(args.pdf)
     verified = verify_pdf(body["source"], pdf)
     run_dir = check_run_dir(Path(args.run_dir))
-    token = _configure_env(pdf)
+    token = _configure_env(pdf, with_llm=args.with_llm, env_file=args.env_file)
 
     sys.path.insert(0, str(API))
     from fastapi.testclient import TestClient
@@ -217,6 +240,7 @@ def capture(args: argparse.Namespace) -> int:
                     for option in options
                 ],
                 "interpretation_status": (payload.get("interpretation") or {}).get("status"),
+                "rationale": (payload.get("interpretation") or {}).get("rationale"),
                 "research_publication": payload.get("research_publication"),
             }
             for option in options[:4]:
@@ -256,6 +280,7 @@ def capture(args: argparse.Namespace) -> int:
         "verified_source": verified,
         "repo": repo_state(),
         "captured_at": datetime.now().astimezone().isoformat(),
+        "llm_enabled": bool(args.with_llm),
         "cases": records,
     }
     target = run_dir / "capture.json"
@@ -299,6 +324,8 @@ def score(args: argparse.Namespace) -> int:
     correct = unsafe = unnecessary_clarify = guessed = false_reject = 0
     clarify_missed = unexpected_clarify = 0
     option_required = option_found = 0
+    option_offered = option_hit = 0
+    llm_interpreted = 0
     resolution_expected = resolution_correct = 0
     binding_checked = binding_correct = 0
 
@@ -361,8 +388,13 @@ def score(args: argparse.Namespace) -> int:
                 cores = {option["core"] for option in options}
                 required = expected["required_option_cores"]
                 option_required += len(required)
+                option_offered += len(cores)
+                option_hit += len(set(required) & cores)
                 found = [core for core in required if core in cores]
                 option_found += len(found)
+                if record["clarification"].get("interpretation_status") == "UNVERIFIED_PROPOSAL":
+                    llm_interpreted += 1
+                entry["option_basis"] = record["clarification"].get("option_basis")
                 if len(found) == len(required):
                     correct += 1
                     entry["verdict"] = "CORRECT_CLARIFICATION"
@@ -428,6 +460,10 @@ def score(args: argparse.Namespace) -> int:
         "clarification_option_recall": (
             round(option_found / option_required, 4) if option_required else None
         ),
+        "clarification_option_precision": (
+            round(option_hit / option_offered, 4) if option_offered else None
+        ),
+        "llm_interpreted_cases": llm_interpreted,
         "resolution_correct_rate": (
             round(resolution_correct / resolution_expected, 4)
             if resolution_expected else None
@@ -492,6 +528,10 @@ def main(argv: list[str] | None = None) -> int:
     cap.add_argument("--questions", type=Path, default=QUESTIONS_DEFAULT)
     cap.add_argument("--pdf", type=Path, required=True)
     cap.add_argument("--run-dir", type=Path, required=True)
+    cap.add_argument("--with-llm", action="store_true",
+                     help="enable the opt-in DeepSeek interpretation (paid, budget 4)")
+    cap.add_argument("--env-file", type=Path, default=None,
+                     help="optional KEY=VALUE file providing DEEPSEEK_API_KEY")
     cap.set_defaults(func=capture)
 
     sc = sub.add_parser("score", help="score a captured trace")

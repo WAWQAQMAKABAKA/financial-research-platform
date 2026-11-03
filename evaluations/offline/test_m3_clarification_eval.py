@@ -156,6 +156,7 @@ def test_all_correct(harness):
     assert summary["unnecessary_clarifications"] == 0
     assert summary["guessed_when_should_clarify"] == 0
     assert summary["clarification_option_recall"] == 1.0
+    assert summary["clarification_option_precision"] == 1.0
     assert summary["resolution_correct_rate"] == 1.0
     assert summary["option_binding_accuracy"] == 1.0
 
@@ -209,3 +210,24 @@ def test_frozen_hash_mismatch_is_rejected(harness):
 
     with pytest.raises(ValueError, match="QUESTIONS_FROZEN_HASH_MISMATCH"):
         ev.score(type("A", (), {"questions": questions, "run_dir": run_dir})())
+
+
+def test_option_precision_penalises_extra_options(harness):
+    tmp_path, questions = harness
+    trace = full_trace()
+    for index in (10, 11):
+        trace["cases"][index]["clarification"]["options"].append(
+            option("持续经营净利润", "1.持续经营净利润")
+        )
+    summary = run_score(tmp_path, questions, trace)
+
+    assert summary["clarification_option_recall"] == 1.0
+    assert summary["clarification_option_precision"] == 0.6667
+
+
+def test_env_file_parser(tmp_path):
+    env_file = tmp_path / "local.env"
+    env_file.write_text("# comment\nDEEPSEEK_API_KEY=abc123\nOTHER=x\n", encoding="utf-8")
+
+    assert ev._load_env_file(env_file) == {"DEEPSEEK_API_KEY": "abc123", "OTHER": "x"}
+    assert ev._load_env_file(None) == {}
