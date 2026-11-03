@@ -146,7 +146,8 @@ def run_score(tmp_path, path, cases):
     trace_path.write_text(json.dumps(trace(cases, ev.digest_bytes(path.read_bytes()))),
                           encoding="utf-8")
     out = tmp_path / "score.json"
-    ev.score(type("A", (), {"questions": path, "trace": trace_path, "out": out})())
+    ev.score(type("A", (), {"questions": path, "trace": trace_path, "out": out,
+                            "run_dir": None})())
     return json.loads(out.read_text())["summary"]
 
 
@@ -237,4 +238,30 @@ def test_score_refuses_a_refrozen_question_set(harness):
 
     with pytest.raises(ValueError, match="QUESTIONS_FROZEN_HASH_MISMATCH"):
         ev.score(type("A", (), {"questions": path, "trace": trace_path,
-                                "out": tmp_path / "score.json"})())
+                                "out": tmp_path / "score.json", "run_dir": None})())
+
+
+def test_run_dir_requires_a_new_directory(tmp_path):
+    args = type("A", (), {"out": None, "run_dir": tmp_path / "run1"})
+    assert ev.capture_target(args) == (tmp_path / "run1").resolve() / "capture.json"
+
+    (tmp_path / "run1").mkdir()
+    with pytest.raises(ValueError, match="RUN_DIRECTORY_EXISTS"):
+        ev.capture_target(args)
+
+
+def test_run_dir_and_explicit_output_are_mutually_exclusive(tmp_path):
+    args = type("A", (), {"out": tmp_path / "x.json", "run_dir": tmp_path / "run"})
+    with pytest.raises(ValueError, match="OUT_AND_RUN_DIR_ARE_MUTUALLY_EXCLUSIVE"):
+        ev.capture_target(args)
+
+
+def test_score_run_dir_requires_capture(tmp_path):
+    args = type("A", (), {"trace": None, "out": None, "run_dir": tmp_path / "missing"})
+    with pytest.raises(ValueError, match="RUN_DIRECTORY_MISSING"):
+        ev.score_targets(args)
+
+    (tmp_path / "run").mkdir()
+    args = type("A", (), {"trace": None, "out": None, "run_dir": tmp_path / "run"})
+    trace, out = ev.score_targets(args)
+    assert trace.name == "capture.json" and out.name == "score.json"

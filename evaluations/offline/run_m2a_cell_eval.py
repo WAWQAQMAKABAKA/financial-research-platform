@@ -99,7 +99,9 @@ def check_output_path(path: Path) -> Path:
     """Captured traces contain source values: only private, untracked areas."""
     target = path.expanduser().resolve()
     if target.exists() or target.is_symlink():
-        raise ValueError("PRIVATE_OUTPUT_ALREADY_EXISTS")
+        raise ValueError(
+            f"PRIVATE_OUTPUT_ALREADY_EXISTS:{target}:use --run-dir for a new run"
+        )
     cache = CACHE_ROOT.resolve()
     private = (ROOT / "data/private").resolve()
     if cache not in target.parents and private not in target.parents:
@@ -200,10 +202,37 @@ def verify_pdf(source: dict, pdf: Path) -> dict:
             "page_count": len(canonical.pages)}
 
 
+def capture_target(args: argparse.Namespace) -> Path:
+    """A new run directory per run; never reuse an existing one."""
+    if args.out is not None and args.run_dir is not None:
+        raise ValueError("OUT_AND_RUN_DIR_ARE_MUTUALLY_EXCLUSIVE")
+    if args.run_dir is not None:
+        run_dir = Path(args.run_dir).expanduser().resolve()
+        if run_dir.exists():
+            raise ValueError(f"RUN_DIRECTORY_EXISTS:{run_dir}")
+        return run_dir / "capture.json"
+    if args.out is None:
+        raise ValueError("OUTPUT_PATH_REQUIRED")
+    return Path(args.out)
+
+
+def score_targets(args: argparse.Namespace) -> tuple[Path, Path]:
+    if args.run_dir is not None and (args.trace is not None or args.out is not None):
+        raise ValueError("RUN_DIR_AND_EXPLICIT_PATHS_ARE_MUTUALLY_EXCLUSIVE")
+    if args.run_dir is not None:
+        run_dir = Path(args.run_dir).expanduser().resolve()
+        if not run_dir.is_dir():
+            raise ValueError(f"RUN_DIRECTORY_MISSING:{run_dir}")
+        return run_dir / "capture.json", run_dir / "score.json"
+    if args.trace is None or args.out is None:
+        raise ValueError("TRACE_AND_OUTPUT_REQUIRED")
+    return Path(args.trace), Path(args.out)
+
+
 def capture(args: argparse.Namespace) -> int:
     body, questions_sha, as_of_iso = load_questions(args.questions, with_expectations=False)
     source = body["source"]
-    target = check_output_path(Path(args.out))
+    target = check_output_path(capture_target(args))
     verified = verify_pdf(source, Path(args.pdf))
 
     sys.path.insert(0, str(API))
@@ -311,12 +340,13 @@ def _compact(value: object) -> str:
 
 def score(args: argparse.Namespace) -> int:
     body, questions_sha, _ = load_questions(args.questions, with_expectations=True)
-    trace = json.loads(Path(args.trace).read_text(encoding="utf-8"))
+    trace_path, out_path = score_targets(args)
+    trace = json.loads(Path(trace_path).read_text(encoding="utf-8"))
     if trace.get("schema_version") != CAPTURE_SCHEMA:
         raise ValueError("TRACE_SCHEMA_INVALID")
     if trace.get("questions_sha256") != questions_sha:
         raise ValueError("QUESTIONS_FROZEN_HASH_MISMATCH")
-    target = check_output_path(Path(args.out))
+    target = check_output_path(out_path)
 
     records = {record["case_id"]: record for record in trace["cases"]}
     results = []
@@ -493,13 +523,15 @@ def main(argv: list[str] | None = None) -> int:
     cap = sub.add_parser("capture", help="label-blind capture via the unmodified runtime")
     cap.add_argument("--questions", type=Path, default=QUESTIONS_DEFAULT)
     cap.add_argument("--pdf", type=Path, required=True)
-    cap.add_argument("--out", type=Path, required=True)
+    cap.add_argument("--run-dir", type=Path, help="new directory for this run (recommended)")
+    cap.add_argument("--out", type=Path, help="explicit trace path (must not exist)")
     cap.set_defaults(func=capture)
 
     sc = sub.add_parser("score", help="score a captured trace against frozen expectations")
     sc.add_argument("--questions", type=Path, default=QUESTIONS_DEFAULT)
-    sc.add_argument("--trace", type=Path, required=True)
-    sc.add_argument("--out", type=Path, required=True)
+    sc.add_argument("--run-dir", type=Path, help="directory written by capture")
+    sc.add_argument("--trace", type=Path, help="explicit capture path")
+    sc.add_argument("--out", type=Path, help="explicit score path (must not exist)")
     sc.set_defaults(func=score)
 
     ver = sub.add_parser("verify-questions", help="cross-check expectations against PDF text")

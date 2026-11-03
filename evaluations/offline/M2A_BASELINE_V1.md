@@ -5,7 +5,7 @@ fact, and one question published an extra row. The frozen set was not changed.
 
 - Questions SHA-256: `b7e2db373d021355e107ca335ce17207ecb3c75703c67bda95ec9db5f645e727`
 - Source: `600760-2026H1-cninfo-1225517994`, source `d53ee98c…`, canonical `620d3a30…`, 207 pages
-- Runtime under test: git `e558dc8` (M2a, unchanged by this evaluation)
+- Runtime under test: git `e558dc8` (M2a); re-run at `45dc6c3` (evaluation files only, runtime hashes unchanged) produced the same scorecard
 - Set: 15 author-curated cases, development only, **not an independent holdout**
 - Captured trace and score: private, untracked, outside tracked files
 
@@ -49,23 +49,23 @@ under `services/api/` — stop, do not capture.
 before the runtime is called. The unmodified `build_report_from_question` is used.
 
 ```zsh
+RUN="data/private/m2a-eval/run_$(date -u +%Y%m%dT%H%M%SZ)"
 .venv/bin/python evaluations/offline/run_m2a_cell_eval.py capture \
   --questions evaluations/offline/m2a_600760_questions_dev_v1.json \
   --pdf data/raw/600760/2026H1/source.pdf \
-  --out data/private/m2a-eval/capture_v1.json
+  --run-dir "$RUN"
 ```
 
 `~/.cache` is not writable under the current sandbox, so the trace is written to
-the gitignored `data/private/` area. The script refuses any output inside the
-repository that is not under `data/private/`, and refuses to overwrite.
+the gitignored `data/private/` area. Each run uses a new directory; an existing
+run directory or output file is refused so prior evidence is never overwritten.
 
 ## Checkpoint 3 — score
 
 ```zsh
 .venv/bin/python evaluations/offline/run_m2a_cell_eval.py score \
   --questions evaluations/offline/m2a_600760_questions_dev_v1.json \
-  --trace data/private/m2a-eval/capture_v1.json \
-  --out data/private/m2a-eval/score_v1.json
+  --run-dir "$RUN"
 ```
 
 ## Baseline scorecard
