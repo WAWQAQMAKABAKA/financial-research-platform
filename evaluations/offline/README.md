@@ -51,3 +51,10 @@ untracked area and must never be committed.
 600760 facts report. Capture drives the real `ask`/`ask/resolve` routes with a
 local token and does not read expectations; score is separate. Results are in
 `M3_CLARIFICATION_BASELINE_V1.md`; captured traces stay private and untracked.
+
+## M4 Experiment — multi-requirement coverage
+
+`m4_multi_evidence_questions_dev_v1.json`, `run_m4_multi_eval.py` and
+`test_m4_multi_eval.py` measure the multi-fact path: decomposition, per-requirement
+coverage, partial reports and the comparison/forecast gates. Results are in
+`M4_MULTI_BASELINE_V1.md`; captured traces stay private and untracked.
