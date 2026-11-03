@@ -151,3 +151,11 @@ def test_new_api_route_fails_closed_without_path(monkeypatch):
     response = TestClient(app).get("/api/v1/research/revenue-scope-preview")
     assert response.status_code == 503
     assert response.json() == {"detail": "SOURCE_UNAVAILABLE"}
+
+
+def test_signed_amount_is_accepted_by_literal_amount_check():
+    assert rv._AMOUNT.fullmatch("-4,921,404.14")
+    assert rv._AMOUNT.fullmatch("6,191,107,217.36")
+    assert rv._AMOUNT.fullmatch("0.00")
+    assert rv._AMOUNT.fullmatch("-0.00")
+    assert not rv._AMOUNT.fullmatch("约 61.9 亿元")

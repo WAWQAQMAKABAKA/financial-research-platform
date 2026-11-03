@@ -8,7 +8,7 @@ import styles from "./facts-report.module.css";
 const REPORT_KEY = "600760-2026H1";
 const DEFAULT_QUESTION =
   "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？";
-const AMOUNT = /^(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}$/;
+const AMOUNT = /^-?(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}$/;
 const HASH = /^[0-9a-f]{64}$/;
 
 export const metadata: Metadata = {

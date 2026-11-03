@@ -220,3 +220,18 @@ def test_forced_selection_resolves_attributable_net_profit():
     assert len(result["facts"]) == 1
     assert result["facts"][0]["value_verbatim"] == "473,065,863.24"
     assert result["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_METRIC"
+
+
+def test_signed_negative_row_publishes():
+    result = rb.build_report_from_question(
+        REPORT_KEY, require_pdf(), "公司上半年的净利是多少？", as_of=AS_OF,
+        forced_selection={
+            "statement_kind": "consolidated_income_statement",
+            "row_label": "2.少数股东损益（净亏损以“-”号填列）",
+            "core": "少数股东损益",
+        },
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert result["facts"][0]["value_verbatim"] == "-4,921,404.14"
+    assert result["publication"]["research_publication"] == "FACTS_ONLY"

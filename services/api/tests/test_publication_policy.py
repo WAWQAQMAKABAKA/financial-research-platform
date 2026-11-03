@@ -208,3 +208,11 @@ def test_unready_draft_is_never_approved():
 
     assert result["may_publish"] is False
     assert result["reason"] == "SOURCE_DRAFT_NOT_READY"
+
+
+def test_signed_negative_amount_is_publishable():
+    result = decide(draft(observations=[observation(value_verbatim="-4,921,404.14")]))
+
+    assert result["may_publish"] is True
+    assert result["published_claim_ids"] == ["SRC1"]
+    assert result["research_publication"] == pp.FACTS_ONLY

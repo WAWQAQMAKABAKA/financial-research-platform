@@ -41,7 +41,7 @@ _STATEMENT_LABELS = {
     "consolidated_income_statement": "合并利润表",
     "parent_income_statement": "母公司利润表",
 }
-_AMOUNT = re.compile(r"(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}\Z")
+_AMOUNT = re.compile(r"-?(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}\Z")
 
 
 def _norm(value: str) -> str:

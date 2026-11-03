@@ -31,7 +31,7 @@ LITERAL_REVIEW_SCOPE = "LITERAL_CELL_LOCATION_ONLY"
 SPAN_STATUS = "NOT_PROVEN_FROM_TABLE_GEOMETRY"
 OBSERVED_FACT = "OBSERVED_FACT"
 
-_AMOUNT = re.compile(r"(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}\Z")
+_AMOUNT = re.compile(r"-?(?:0|[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)\.\d{2}\Z")
 _EVIDENCE_ID = re.compile(r"^[0-9a-f]{64}$")
 
 # Capabilities that exist in the platform but cannot be published in M1.
