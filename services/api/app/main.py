@@ -544,3 +544,45 @@ def local_retrieval_analyst(
         )
     finally:
         _M124_MODEL_LOCK.release()
+
+
+# M1: one local, dev-only facts-only disclosure report. No persistence, no
+# model, and no production exposure. Publication is decided by
+# publication_policy from the verified draft, not by this route.
+@app.get("/api/v1/research/reports/{report_key}")
+@_serialize_pdf_route
+def local_facts_report(
+    report_key: str,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    """Dev-only facts-only report; the shared local secret is the gate."""
+    if os.environ.get("FRP_ENV", "").strip().casefold() in {
+        "production", "prod", "staging",
+    }:
+        raise HTTPException(status_code=404, detail="Not available")
+    if os.environ.get("FRP_LOCAL_FACTS_REPORT") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+    token = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (len(token) < 32 or not x_frp_local_token
+            or not compare_digest(token, x_frp_local_token)):
+        raise HTTPException(status_code=404, detail="Not available")
+
+    from datetime import datetime
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import report_builder
+
+    if report_key not in report_builder.supported_report_keys():
+        raise HTTPException(status_code=404, detail="Report not available")
+    pdf_path = os.environ.get(f"FRP_LOCAL_SOURCE_PDF_{report_key.split('-')[0]}")
+    if not pdf_path:
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE")
+
+    try:
+        return report_builder.build_report(
+            report_key, Path(pdf_path),
+            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Facts-only report unavailable")
+        raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None

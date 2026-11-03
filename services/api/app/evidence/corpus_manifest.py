@@ -140,6 +140,17 @@ class CorpusManifest(StrictRecord):
                 return document
         raise CorpusEntryMissing(f"{document_id}:{','.join(self.document_ids)}")
 
+    def require_report_key(self, report_key: str) -> CorpusDocument:
+        """Resolve the platform report key (ticker-period) to an entry."""
+        for document in self.documents:
+            if report_key_of(document) == report_key:
+                return document
+        raise CorpusEntryMissing(f"{report_key}:{','.join(self.document_ids)}")
+
+
+def report_key_of(document: CorpusDocument) -> str:
+    return f"{document.ticker}-{document.report_period}"
+
 
 def load_corpus_manifest(path: Path | None = None) -> CorpusManifest:
     """Load and validate the tracked manifest. Never returns a partial corpus."""
@@ -168,15 +179,22 @@ def verify_document(
     document: CorpusDocument,
     repo_root: Path | None = None,
     *,
+    pdf_path: Path | None = None,
     verify_canonical: bool = False,
 ) -> Path:
     """Check the declared PDF really is the declared document.
+
+    ``pdf_path`` allows a provisioned file outside the repository layout
+    (the operator-supplied local path) to be checked against the same declared
+    identity. The bytes, not the location, are the identity.
 
     Cheap path (default) verifies presence and the raw source bytes. Setting
     ``verify_canonical`` additionally re-derives the canonical text hash and page
     count, which is the expensive but authoritative check.
     """
-    path = document.require_pdf(repo_root)
+    path = document.require_pdf(repo_root) if pdf_path is None else Path(pdf_path)
+    if not path.is_file():
+        raise CorpusDocumentMissing(f"{document.document_id}:{path}")
 
     actual = sha256_file(path)
     if actual != document.source_sha256:

@@ -13,10 +13,13 @@ from pathlib import Path
 
 import pymupdf
 
-from app.evidence import preview
 from app.evidence.cell_attribution import locate_cells_in_verified_pdf
 from app.evidence.contracts import SourceDocument
+from app.evidence.corpus_manifest import load_corpus_manifest, report_key_of
 from app.modules.financial_report_analyst import revenue_scope
+
+AUTHORIZATION_MANIFEST = "CORPUS_MANIFEST"
+AUTHORIZATION_LEGACY = "LEGACY_HARDCODED"
 
 
 @dataclass(frozen=True)
@@ -28,25 +31,54 @@ class ReportEntry:
     section_kind: str
     row_label: str
     column_header: str
+    authorization: str
 
 
-# Source metadata is defined once in earlier, independently hash-verified
-# reports; no duplicated real-document amounts or expected page coordinates.
-# Only the query selection changes, not the extraction/reviewer implementation.
-REPORTS: dict[str, ReportEntry] = {
+# Query selection per report: which statement, row and column is requested.
+# This is query configuration, never document identity. Identity comes from the
+# tracked corpus manifest for authorized documents.
+SELECTIONS: dict[str, dict[str, str]] = {
+    "600760-2026H1": {
+        "section_kind": "consolidated_income_statement",
+        "row_label": "其中：营业收入",
+        "column_header": "2026 年半年度",
+    },
+}
+
+# 600276 is deliberately NOT in the authorized corpus (its PDF is not present
+# locally and has not been provisioned). It stays a legacy hardcoded entry so
+# its existing workspace preview keeps failing closed as BLOCKED. It is not a
+# report-capable document in M1; the facts-only report path accepts only
+# CORPUS_MANIFEST entries.
+LEGACY_REPORTS: dict[str, ReportEntry] = {
     "600276-2026H1": ReportEntry(
         key="600276-2026H1", issuer_name="恒瑞医药", source=revenue_scope.SOURCE,
         pdf_env_name="FRP_LOCAL_SOURCE_PDF_600276",
         section_kind="consolidated_income_statement",
         row_label="其中：营业收入", column_header="2026 年半年度",
-    ),
-    "600760-2026H1": ReportEntry(
-        key="600760-2026H1", issuer_name="中航沈飞", source=preview.SOURCE,
-        pdf_env_name="FRP_LOCAL_SOURCE_PDF_600760",
-        section_kind="consolidated_income_statement",
-        row_label="其中：营业收入", column_header="2026 年半年度",
+        authorization=AUTHORIZATION_LEGACY,
     ),
 }
+
+
+def _manifest_reports() -> dict[str, ReportEntry]:
+    reports: dict[str, ReportEntry] = {}
+    for document in load_corpus_manifest().documents:
+        key = report_key_of(document)
+        selection = SELECTIONS.get(key)
+        if selection is None:
+            continue
+        reports[key] = ReportEntry(
+            key=key, issuer_name=document.issuer_name,
+            source=document.to_source_document(),
+            pdf_env_name=f"FRP_LOCAL_SOURCE_PDF_{document.ticker}",
+            authorization=AUTHORIZATION_MANIFEST,
+            **selection,
+        )
+    return reports
+
+
+REPORTS: dict[str, ReportEntry] = {**_manifest_reports(), **LEGACY_REPORTS}
 
 
 class UnknownReportError(ValueError):
