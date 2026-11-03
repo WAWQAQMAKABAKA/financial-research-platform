@@ -110,11 +110,30 @@ rationale “净利口径不明确，可能指合并净利润、归属于母公�
 股东损益，需同时列出候选行。” All three ids were validated against the closed
 option set before display.
 
-**New finding:** resolving `少数股东损益` returned `LITERAL_REVIEW_NOT_PASSED`
+**Finding at v2:** resolving `少数股东损益` returned `LITERAL_REVIEW_NOT_PASSED`
 because its disclosed value is negative (`-4,921,404.14`) and the literal amount
-pattern accepts only unsigned decimals. The option is a real row and the binding
-is correct; the gap is in publication formatting, not clarification. Allowing
-signed amounts would change what may publish and needs a separate decision.
+pattern accepted only unsigned decimals. The option is a real row and the binding
+was correct; the gap was in publication formatting, not clarification.
+
+### v3 — signed amounts allowed (`a506f0e`)
+
+The gap was approved and fixed: an optional leading minus is now accepted by the
+literal reviewer, the publication policy and the web fact validator. A clean
+re-run at `a506f0e` resolves `少数股东损益` to `-4,921,404.14`.
+
+| Metric | v3 |
+|---|---|
+| Option basis | LLM_PROPOSAL_VALIDATED |
+| Options for 净利 | 3 |
+| Option recall / precision | 1.0 / 0.6667 |
+| Resolution correctness | 2/2 |
+| Option binding | **3/3** |
+| Correct interpretations | 11/12 |
+| Unsafe / unnecessary / guessed | 0 / 0 / 0 |
+| Latency avg / max | 20.9 s / 103.3 s |
+
+The capture resolves all three options to test binding; the product resolves only
+the option the user clicks.
 
 **Fixed during this run:** the provider echoes `response_format` as an extra
 `"type"` field; `extra="forbid"` made a valid proposal fail and silently fall
@@ -134,7 +153,7 @@ interpretation status/reason so failures are visible.
 
 ## Next
 
-1. Decide whether signed (negative) disclosed amounts may publish; today they
-   are rejected by the literal amount pattern.
-2. Scope clarification (consolidated vs parent) as a separate slice.
-3. Multi-evidence requirements and coverage in M4; publication rules unchanged.
+1. Scope clarification (consolidated vs parent) as a separate slice; M3 still
+   rejects a question that names both statements.
+2. Multi-evidence requirements and coverage in M4; publication rules unchanged.
+3. Comparison and forecast remain out of scope regardless of clarification.
