@@ -35,3 +35,11 @@ reject a wrong denominator or growth scope; an Analyst's own labels must not
 serve as both claim and oracle. Preserve `UNCERTAIN` where the source cannot
 settle a claim. Run independent real-document validation subsequently, outside
 this development set.
+
+## M2a Track A — 600760 cell-level baseline
+
+`m2a_600760_questions_dev_v1.json`, `run_m2a_cell_eval.py` and
+`test_m2a_cell_eval.py` measure the question-to-cell selector on the authorized
+600760 2026H1 disclosure. Capture and score are separate; capture is label-blind.
+Results live in `M2A_BASELINE_V1.md`; captured traces stay in a private,
+untracked area and must never be committed.
