@@ -60,3 +60,24 @@
   .reviewRow{grid-template-columns:1fr}
   .hero{padding:28px 24px}
 }
+
+.ask{margin:20px 0 6px;background:#fff;border:1px solid #dce7e9;border-radius:13px;padding:20px 24px}
+.ask label{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;color:#5b7d86;margin-bottom:10px}
+.askRow{display:flex;gap:10px;flex-wrap:wrap}
+.askRow input{flex:1 1 380px;min-width:0;padding:12px 14px;border:1px solid #c9dade;border-radius:9px;font-size:14px;color:#1b3441;background:#fbfdfd}
+.askRow input:focus{outline:2px solid #7fb3b8;outline-offset:1px}
+.askRow button{background:#195968;border:0;border-radius:9px;color:#fff;padding:12px 20px;font-weight:750;cursor:pointer;white-space:nowrap}
+.askRow button:hover{background:#144b57}
+.askHint{margin:11px 0 0;font-size:11px;line-height:1.8;color:#647c85}
+.notice{margin:10px 0 0;padding:10px 13px;border-left:3px solid #d2a24a;background:#fdf7e9;font-size:12px;line-height:1.8;color:#6f5a2c}
+.trace{background:#fff;border:1px solid #dbe6e9;border-radius:13px;padding:20px 24px;margin:0 0 16px}
+.traceLine{margin:9px 0 0;font-size:12px;line-height:1.8;color:#43636d}
+.hits{list-style:none;counter-reset:hit;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.hits li{counter-increment:hit;display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;padding-top:10px;border-top:1px solid #eef3f4}
+.hitPage{font-size:11px;font-weight:800;color:#1e5d69}
+.hitText{font-size:12px;line-height:1.75;color:#5a727e;overflow-wrap:anywhere}
+.reviewRow + .reviewRow{margin-top:4px;padding-top:14px;border-top:1px solid #eef3f4}
+@media (max-width:900px){
+  .hits li{grid-template-columns:1fr}
+  .askRow button{width:100%}
+}
