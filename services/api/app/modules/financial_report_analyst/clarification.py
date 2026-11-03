@@ -166,6 +166,8 @@ def build_clarification(
     secret: str,
     proposed_option_ids: list[str] | None = None,
     interpretation_rationale: str | None = None,
+    interpretation_status: str | None = None,
+    interpretation_reason: str | None = None,
 ) -> dict | None:
     """Build a clarification or return None when it should not be asked.
 
@@ -217,10 +219,11 @@ def build_clarification(
             for option in candidates
         ],
         "interpretation": {
-            "status": (
+            "status": interpretation_status or (
                 "UNVERIFIED_PROPOSAL" if proposed_option_ids is not None
                 else "NOT_PERFORMED"
             ),
+            "reason": interpretation_reason,
             "rationale": interpretation_rationale,
         },
         "financial_semantic_review": "NOT_PERFORMED",

@@ -84,3 +84,21 @@ def test_interpret_surfaces_provider_failure(monkeypatch):
     result = interp.interpret("净利是多少？", CLOSED, api_key="key")
 
     assert result["reason"] == "MODEL_PROVIDER_UNAVAILABLE"
+
+
+def test_provider_echoed_metadata_is_ignored(monkeypatch):
+    payload = {
+        "type": "json_object",
+        "operation": "LOOKUP",
+        "candidate_option_ids": ["a" * 64, "b" * 64],
+        "rationale": "净利可指净利润或归母净利润。",
+    }
+    monkeypatch.setattr(
+        deepseek_draft, "_send",
+        lambda body, api_key, client: response(payload),
+    )
+
+    result = interp.interpret("净利是多少？", CLOSED, api_key="key")
+
+    assert result["status"] == "INTERPRETATION_READY"
+    assert result["candidate_option_ids"] == ["a" * 64, "b" * 64]

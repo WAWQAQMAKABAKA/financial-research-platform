@@ -637,6 +637,8 @@ def _attempt_clarification(
 
     proposed_ids: list[str] | None = None
     rationale: str | None = None
+    interpretation_status: str | None = None
+    interpretation_reason: str | None = None
     if os.environ.get("FRP_LOCAL_CLARIFY_LLM") == "1":
         api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
         if api_key:
@@ -651,6 +653,10 @@ def _attempt_clarification(
                         if interp.get("status") == "INTERPRETATION_READY":
                             proposed_ids = interp["candidate_option_ids"]
                             rationale = interp["rationale"]
+                            interpretation_status = "UNVERIFIED_PROPOSAL"
+                        else:
+                            interpretation_status = "WITHHELD"
+                            interpretation_reason = interp.get("reason")
                 finally:
                     _M3_CLARIFY_LLM_LOCK.release()
 
@@ -661,6 +667,8 @@ def _attempt_clarification(
         report_key=report_key, document=document, index=index, question=question,
         statement_kind=statement_kind, secret=secret,
         proposed_option_ids=proposed_ids, interpretation_rationale=rationale,
+        interpretation_status=interpretation_status,
+        interpretation_reason=interpretation_reason,
     )
 
 

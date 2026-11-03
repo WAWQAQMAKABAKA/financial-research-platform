@@ -45,7 +45,9 @@ investment advice.
 
 
 class CompactInterpretation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # The provider may echo response_format metadata (e.g. "type"); only the
+    # three fields below are used, and option ids are still closed-set checked.
+    model_config = ConfigDict(extra="ignore")
 
     operation: str = Field(min_length=1, max_length=24)
     candidate_option_ids: list[str]
