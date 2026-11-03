@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import styles from "./research.module.css";
 
-const REPORT_PATH = "/research/reports/600276-2026H1";
+const REPORT_PATH = "/research/reports/600760-2026H1";
 
 async function getApiStatus(): Promise<"CONNECTED" | "UNAVAILABLE"> {
   const base =
@@ -86,22 +86,22 @@ export default function ResearchPage() {
               <p className={styles.eyebrow}>
                 当前研究任务 / 仅支持以下披露
               </p>
-              <h2>恒瑞医药 · 2026年半年度</h2>
+              <h2>中航沈飞 · 2026年半年度</h2>
               <p className={styles.metadata}>
-                股票代码：600276 · 公告日期：2026年8月20日
+                股票代码：600760 · 公告日期：2026年8月28日
               </p>
             </div>
             <span className={styles.localBadge}>
-              本地预览 · 尚未发布
+              本地开发预览 · 仅披露事实
             </span>
           </div>
 
           <div className={styles.question}>
             <span>核心研究问题</span>
             <p>
-              恒瑞医药2026年半年度报告中有哪些营业收入相关数据
-              和创新药销售披露？这些原始证据能够证明什么，
-              哪些财务解释仍需进一步核验？
+              中航沈飞2026年半年度合并利润表中，
+              「其中：营业收入」在「2026年半年度」列披露的金额是多少？
+              这条披露事实的来源与原文位置是什么？
             </p>
           </div>
 
@@ -125,11 +125,11 @@ export default function ResearchPage() {
 
           <div className={styles.actionRow}>
             <Link className={styles.primary} href={REPORT_PATH}>
-              打开恒瑞医药研究报告 →
+              查看 600760 披露事实报告 →
             </Link>
             <p>
-              进入报告后点击“生成研究预览”，
-              系统将重新核验本地原始PDF及其证据关联。
+              报告逐字定位原始 PDF 中的披露事实，并展示来源哈希、
+              页码引用与逐条独立核验；仅发布披露事实。
             </p>
           </div>
         </section>
@@ -141,9 +141,9 @@ export default function ResearchPage() {
           <div>
             <h2>目前可以完成什么？</h2>
             <p>
-              查看两项保留原始报表口径的营业收入数据、
-              一段注明来源的管理层披露、原始PDF页码链接，
-              并对限定范围内的拟议观点进行核验。
+              查看一条已核对的中航沈飞合并利润表披露事实、
+              原始 PDF 的页码引用、来源哈希与正典哈希，
+              以及独立核验结论和未发布内容清单。
             </p>
           </div>
           <div>
@@ -166,7 +166,8 @@ export default function ResearchPage() {
             原始报告尚未完成独立财务语义核验。
             限定范围内的观点核验可以发现与原文不符的表述，
             或返回“尚无法确认”，但不会批准发布。
-            研究报告未持久化保存，研究发布始终处于阻止状态。
+            披露事实报告不持久化保存，仅发布已核对的披露事实；
+            比较、推断与前瞻性判断仍被阻止，不对外发布。
           </p>
           <Suspense
             fallback={
