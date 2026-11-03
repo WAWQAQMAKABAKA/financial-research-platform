@@ -141,6 +141,34 @@ back to the deterministic options. Unknown metadata is now ignored (ids are
 still closed-set validated), and the clarification payload exposes the
 interpretation status/reason so failures are visible.
 
+## v4 — statement-scope clarification (`926eb06`)
+
+The same frozen 12-case set, deterministic path. Scope inference now resolves a
+metric that exists in only one statement (`ROW_UNIQUE_STATEMENT`), and a real
+tie between 合并利润表 and 母公司利润表 asks the user instead of rejecting.
+
+| Metric | v3 (LLM + signed) | v4 (deterministic + scope) |
+|---|---|---|
+| Correct interpretations | 11/12 | **12/12** |
+| Unsafe publications | 0 | 0 |
+| Unnecessary clarifications | 0 | 0 |
+| Guessed when should clarify | 0 | 0 |
+| Option recall / precision | 1.0 / 0.6667 | 1.0 / 0.5 |
+| Resolution correctness | 2/2 | 2/2 |
+| Option binding | 3/3 | 3/3 |
+| Latency avg / max | 20.9 s / 103.3 s | 14.3 s / 78.5 s |
+
+M3-12 (`研发投入`) now rejects with `NO_ROW_MATCH`, which is what the frozen set
+recorded: the previous `AMBIGUOUS_STATEMENT_SCOPE` was a scope decision made
+before the metric was checked. The set was not edited; the order of the checks
+changed.
+
+End-to-end scope flow verified separately: `利润总额是多少？` returns
+`STATEMENT_SCOPE_AMBIGUOUS` with 合并利润表 / 母公司利润表; choosing
+合并利润表 publishes 565,393,924.81 with
+`selection_basis = USER_RESOLVED_STATEMENT_SCOPE`. A question naming both
+statements is still rejected as a multi-statement request.
+
 ## Limitations
 
 - Single document, single period, 12 author-curated cases; not a holdout.
@@ -153,7 +181,7 @@ interpretation status/reason so failures are visible.
 
 ## Next
 
-1. Scope clarification (consolidated vs parent) as a separate slice; M3 still
-   rejects a question that names both statements.
-2. Multi-evidence requirements and coverage in M4; publication rules unchanged.
-3. Comparison and forecast remain out of scope regardless of clarification.
+1. Multi-evidence requirements and coverage in M4; publication rules unchanged.
+2. Comparison and forecast remain out of scope regardless of clarification.
+3. Optionally re-run the LLM path at the current runtime; the v3 numbers were
+   captured at `a506f0e`, before scope clarification.
