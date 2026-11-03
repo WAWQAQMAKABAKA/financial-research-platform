@@ -711,13 +711,22 @@ def local_facts_report_ask(
     from datetime import datetime
     from pathlib import Path
     from zoneinfo import ZoneInfo
-    from app.modules.financial_report_analyst import report_builder
+    from app.modules.financial_report_analyst import evidence_plan, report_builder
 
     as_of = datetime.now(ZoneInfo("Asia/Shanghai"))
     try:
-        result = report_builder.build_report_from_question(
-            report_key, Path(pdf_path), request.question, as_of=as_of,
-        )
+        if len(evidence_plan.split_facets(request.question)) >= 2:
+            result = report_builder.build_multi_report(
+                report_key, Path(pdf_path), request.question, as_of=as_of,
+            )
+            if result is None:
+                result = report_builder.build_report_from_question(
+                    report_key, Path(pdf_path), request.question, as_of=as_of,
+                )
+        else:
+            result = report_builder.build_report_from_question(
+                report_key, Path(pdf_path), request.question, as_of=as_of,
+            )
     except Exception:
         logging.getLogger(__name__).exception("Question report unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None

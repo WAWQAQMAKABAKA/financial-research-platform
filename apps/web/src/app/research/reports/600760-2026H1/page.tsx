@@ -77,6 +77,23 @@ type Selection = {
   } | null;
 };
 
+type CoverageRequirement = {
+  requirement_id: string;
+  facet: string;
+  status: string;
+  reason?: string | null;
+  row_label?: string | null;
+};
+
+type Coverage = {
+  complete: boolean;
+  total: number;
+  satisfied: number;
+  statement_kind: string;
+  selection_basis: string;
+  requirements: CoverageRequirement[];
+};
+
 type Report = {
   status: "REPORT_READY";
   reason: null;
@@ -96,6 +113,7 @@ type Report = {
     authorization_note: string;
   };
   request: { question: string; question_code: string | null };
+  coverage?: Coverage;
   retrieval?: Retrieval;
   selection?: Selection;
   facts: Fact[];
@@ -483,6 +501,27 @@ async function ReportBody({ searchParams }: {
       <div className={styles.grid}>
         <div>
           {report.facts.map((fact) => <FactCard key={fact.claim_id} fact={fact} />)}
+
+          {report.coverage && (
+            <section className={styles.reviewCard} aria-label="证据覆盖">
+              <p className={styles.kicker}>证据覆盖 / EVIDENCE COVERAGE</p>
+              <p className={styles.coverageLine}>
+                已满足 {report.coverage.satisfied}/{report.coverage.total}
+                {report.coverage.complete ? " · 完整" : " · 部分结果"}
+              </p>
+              <ul className={styles.withheldList}>
+                {report.coverage.requirements.map((item) => (
+                  <li key={item.requirement_id}>
+                    <strong>{item.facet}</strong>
+                    <span>
+                      {item.status}
+                      {item.reason ? ` · ${item.reason}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className={styles.reviewCard} aria-label="逐条独立核验">
             <p className={styles.kicker}>逐条独立核验 / CLAIM-LEVEL REVIEW</p>

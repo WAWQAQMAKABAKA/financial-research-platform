@@ -245,3 +245,22 @@ def test_ask_offers_scope_choice_and_resolve_publishes(monkeypatch):
     assert report["status"] == "REPORT_READY"
     assert report["facts"][0]["value_verbatim"] == "565,393,924.81"
     assert report["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_STATEMENT_SCOPE"
+
+
+def test_multi_fact_question_returns_coverage(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+
+    response = TestClient(app).post(
+        ASK_URL,
+        json={"question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入和净利润分别是多少？"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["report_type"] == "FACTS_ONLY_MULTI_REQUIREMENT_REPORT"
+    assert len(report["facts"]) == 2
+    assert report["coverage"]["complete"] is True

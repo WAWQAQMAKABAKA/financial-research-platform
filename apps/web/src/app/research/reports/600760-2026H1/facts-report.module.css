@@ -87,3 +87,5 @@
 .clarifyOption:hover{border-color:#4a8585;background:#f5fafb}
 .clarifyOption strong{font-size:15px;color:#174a56}
 .clarifyOption span{font-size:12px;color:#647c85;line-height:1.7}
+
+.coverageLine{margin:12px 0 0;font-size:13px;font-weight:750;color:#295b62}

@@ -27,6 +27,7 @@ from app.modules.financial_report_analyst.contracts import (
 )
 from app.modules.financial_report_analyst import (
     canonical_retrieval,
+    evidence_plan,
     intent_gate,
     publication_policy,
     question_selection,
@@ -611,5 +612,346 @@ def build_report_from_question(
         "reviews": reviews_out,
         "publication": decision,
         "limitations": list(ASK_LIMITATIONS),
+        "report_storage": "NOT_PERSISTED",
+    }
+
+
+MULTI_VERSION = "m4-multi-requirement-report-v1"
+
+
+def build_multi_report(
+    report_key: str,
+    pdf_path: Path,
+    question: str,
+    *,
+    as_of: datetime,
+) -> dict | None:
+    """Two or three independent facts -> requirements -> coverage -> policy.
+
+    Returns None when the question is not multi-fact so the caller keeps the
+    single-fact path. Unsatisfied requirements are reported, never inferred.
+    """
+    entry = source_workspace.REPORTS.get(report_key)
+    if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
+        raise source_workspace.UnknownReportError("REPORT_NOT_AUTHORIZED_IN_CORPUS")
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    if document.to_source_document() != entry.source:
+        raise ValueError("MANIFEST_SOURCE_IDENTITY_MISMATCH")
+
+    if (not isinstance(question, str) or not question.strip()
+            or len(question) > MAX_QUESTION_CHARS):
+        return _withheld(
+            report_key, "QUESTION_INVALID", document=document,
+            extra={"request": {"question": question, "question_code": None}},
+        )
+
+    path = Path(pdf_path)
+    corpus_manifest.verify_document(document, pdf_path=path)
+
+    intent = intent_gate.classify_intent(question)
+    intent_block = {"value": intent.value, "version": intent_gate.INTENT_VERSION}
+    if intent is not intent_gate.Intent.FACT_LOOKUP:
+        return _withheld(
+            report_key, str(intent_gate.rejection_reason(intent)), document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    try:
+        retrieval = canonical_retrieval.retrieve_report_evidence(
+            entry.source, path, question, as_of=as_of,
+        )
+    except ValueError as exc:
+        return _withheld(
+            report_key, str(exc) or "RETRIEVAL_FAILED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+    retrieval_trace = _retrieval_trace(retrieval)
+
+    expected = publication_policy.period_expectations(document.report_period)
+    if expected is None:
+        return _withheld(
+            report_key, "UNSUPPORTED_REPORT_PERIOD", document=document,
+            extra={"request": {"question": question, "question_code": None}},
+        )
+    column_header = expected[0]
+
+    try:
+        index = document_index.index_document_scoped(
+            entry.source, path, as_of=as_of,
+            section_kinds=frozenset(question_selection.INCOME_STATEMENT_KINDS),
+        )
+    except ValueError as exc:
+        return _withheld(
+            report_key, str(exc) or "INDEX_SCOPE_FAILED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace},
+        )
+
+    plan = evidence_plan.plan_requirements(
+        index, question=question, report_period=document.report_period,
+        column_header=column_header, retrieval_hits=retrieval_trace["hits"],
+    )
+    if plan is None:
+        return None
+
+    if plan["status"] == "SCOPE_AMBIGUOUS":
+        return _withheld(
+            report_key, "AMBIGUOUS_STATEMENT_SCOPE", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block, "retrieval": retrieval_trace,
+                   "selection": {"status": "SELECTION_WITHHELD",
+                                 "reason": "AMBIGUOUS_STATEMENT_SCOPE",
+                                 "trace": {"present_statement_kinds": plan["present"]}}},
+        )
+    if plan["status"] != "PLAN_READY":
+        return _withheld(
+            report_key, str(plan.get("reason") or "NO_STATEMENT_SCOPE"),
+            document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block, "retrieval": retrieval_trace},
+        )
+
+    satisfied = [item for item in plan["requirements"] if item["status"] == "SATISFIED"]
+    if not satisfied:
+        return _withheld(
+            report_key, "NO_VERIFIED_REQUIREMENT", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace,
+                   "coverage": {"complete": False, "total": len(plan["requirements"]),
+                                "satisfied": 0,
+                                "requirements": plan["requirements"]}},
+        )
+
+    selections = []
+    labels = []
+    for item in satisfied:
+        label = item["row"]["row_label"]
+        if label in labels:
+            continue
+        labels.append(label)
+        selections.append({
+            "section_kind": plan["statement_kind"],
+            "row_label": label, "column_header": column_header,
+        })
+
+    try:
+        located = locate_cells_in_verified_pdf(
+            entry.source, path, as_of=as_of, selections=selections,
+            bounded_tables=True,
+        )
+    except ValueError as exc:
+        return _withheld(
+            report_key, str(exc) or "SOURCE_CELL_UNRESOLVED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace},
+        )
+    if len(located) != len(selections) or any(
+        item.get("status") != "ONE_CELL_CANDIDATE" for item in located
+    ):
+        return _withheld(
+            report_key, "SOURCE_CELL_UNRESOLVED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace},
+        )
+
+    verified: dict[str, tuple[dict, str]] = {}
+    failures: dict[str, str] = {}
+    with pymupdf.open(path) as pdf:
+        for result, chosen in zip(located, selections):
+            label = chosen["row_label"]
+            options = result.get("candidates")
+            if not isinstance(options, list) or len(options) != 1:
+                failures[label] = "SOURCE_CELL_AMBIGUOUS"
+                continue
+            item = options[0]
+            ok, reason = question_selection.validate_candidate(
+                item, entry.source, section_kind=chosen["section_kind"],
+                row_label=label, column_header=column_header,
+            )
+            if not ok:
+                failures[label] = reason
+                continue
+            raw = str(item.get("cell_text_verbatim") or "").strip()
+            if not raw:
+                failures[label] = "SOURCE_CELL_BLANK_NOT_ZERO"
+                continue
+            if raw in {"-", "—", "–", "－", "―"}:
+                failures[label] = "SOURCE_CELL_DASH_NOT_ZERO"
+                continue
+            accepted, rationale = revenue_scope.review_literal(item, pdf)
+            if not accepted:
+                failures[label] = "LITERAL_REVIEW_NOT_PASSED"
+                continue
+            verified[label] = (item, rationale)
+
+    if not verified:
+        return _withheld(
+            report_key, "NO_VERIFIED_REQUIREMENT", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace,
+                   "coverage": {"complete": False, "total": len(plan["requirements"]),
+                                "satisfied": 0, "requirements": plan["requirements"]}},
+        )
+
+    claims, reviews, observations = [], [], []
+    for number, label in enumerate(labels, start=1):
+        if label not in verified:
+            continue
+        item, rationale = verified[label]
+        claim_id = f"Q{number}"
+        claims.append(ResearchClaim(
+            claim_id=claim_id, kind=ClaimKind.OBSERVED_FACT,
+            text=(
+                f'在「{item["statement_heading_verbatim"]}」中，'
+                f'「{item["row_label_verbatim"]}」在'
+                f'「{item["column_header_verbatim"]}」列披露为'
+                f'「{item["cell_text_verbatim"]}」。'
+            ),
+            evidence_ids=(item["candidate_id"],),
+        ))
+        reviews.append(ClaimReview(
+            claim_id=claim_id, reviewer_id="native-pdf-cell-literal-reviewer-v1",
+            verdict=ReviewVerdict.ADMIT, rationale=rationale,
+        ))
+        observations.append({
+            "claim_id": claim_id,
+            "evidence_id": item["candidate_id"],
+            "statement_title": item["statement_heading_verbatim"],
+            "statement_type_candidate": item["section_kind_candidate"],
+            "row_label": item["row_label_verbatim"],
+            "column_header": item["column_header_verbatim"],
+            "value_verbatim": item["cell_text_verbatim"],
+            "statement_context": item["statement_context_verbatim"],
+            "page_number": item["page_number"],
+            "cell_bbox_pt": item["cell_bbox_pt"],
+            "source_text_span_status": item["source_text_span_status"],
+            "review_scope": "LITERAL_CELL_LOCATION_ONLY",
+        })
+
+    draft = {
+        "status": "SOURCE_DRAFT_READY",
+        "document_id": document.document_id,
+        "source_sha256": document.source_sha256,
+        "canonical_sha256": document.canonical_sha256,
+        "source_url": document.source_url,
+        "observations": observations,
+        "claims": [claim.model_dump(mode="json") for claim in claims],
+        "reviews": [review.model_dump(mode="json") for review in reviews],
+    }
+    decision = publication_policy.decide_publication(
+        draft, document,
+        expected_statement_kind=plan["statement_kind"],
+        expected_row_labels=tuple(
+            observation["row_label"] for observation in observations
+        ),
+        as_of=as_of,
+    )
+    if not decision.get("may_publish"):
+        return _withheld(
+            report_key, str(decision.get("reason") or "PUBLICATION_WITHHELD"),
+            decision=decision, document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "retrieval": retrieval_trace},
+        )
+
+    published = set(decision["published_claim_ids"])
+    draft_published = {
+        "claims": [claim.model_dump(mode="json") for claim in claims
+                   if claim.claim_id in published],
+        "observations": [observation for observation in observations
+                         if observation["claim_id"] in published],
+    }
+    facts = _fact_rows(draft_published, document)
+    reviews_out = [{
+        "claim_id": review.claim_id,
+        "verdict": review.verdict.value,
+        "reviewer_id": review.reviewer_id,
+        "rationale": review.rationale,
+        "review_scope": publication_policy.LITERAL_REVIEW_SCOPE,
+    } for review in reviews if review.claim_id in published]
+
+    requirement_rows = []
+    covered = 0
+    for item in plan["requirements"]:
+        if item["status"] == "SATISFIED":
+            label = item["row"]["row_label"]
+            if label in verified:
+                covered += 1
+                requirement_rows.append({
+                    "requirement_id": item["requirement_id"],
+                    "facet": item["facet"], "status": "VERIFIED",
+                    "row_label": label,
+                })
+            else:
+                requirement_rows.append({
+                    "requirement_id": item["requirement_id"],
+                    "facet": item["facet"], "status": "NOT_VERIFIED",
+                    "reason": failures.get(label, "VERIFICATION_FAILED"),
+                })
+        else:
+            requirement_rows.append({
+                "requirement_id": item["requirement_id"],
+                "facet": item["facet"], "status": item["status"],
+                "reason": item.get("status"),
+            })
+
+    coverage = {
+        "complete": covered == len(plan["requirements"]),
+        "total": len(plan["requirements"]),
+        "satisfied": covered,
+        "statement_kind": plan["statement_kind"],
+        "selection_basis": plan["selection_basis"],
+        "requirements": requirement_rows,
+    }
+
+    source = document.to_source_document()
+    question_sha = sha256(question.encode("utf-8")).hexdigest()
+    limitations = list(ASK_LIMITATIONS) + [
+        "多条目问题只回答已满足并核验的条目；缺失项已列出，不做推断、比较或补写。",
+    ]
+    return {
+        "status": "REPORT_READY",
+        "reason": None,
+        "report_type": "FACTS_ONLY_MULTI_REQUIREMENT_REPORT",
+        "report_version": MULTI_VERSION,
+        "report_key": report_key,
+        "report_id": sha256(
+            f"{document.document_id}|{document.canonical_sha256}|"
+            f"{MULTI_VERSION}|{question_sha}".encode()
+        ).hexdigest(),
+        "issuer": {
+            "name": document.issuer_name, "ticker": document.ticker,
+            "report_period": document.report_period,
+        },
+        "source": {
+            "document_id": document.document_id,
+            "source_url": document.source_url,
+            "published_on": document.published_on.isoformat(),
+            "pit_available_at": source.pit_available_at.isoformat(),
+            "source_sha256": document.source_sha256,
+            "canonical_sha256": document.canonical_sha256,
+            "page_count": document.page_count,
+            "authorization_note": document.authorization_note,
+        },
+        "request": {"question": question, "question_code": QUESTION_CODE},
+        "intent": intent_block,
+        "retrieval": _retrieval_trace(retrieval, include_excerpts=True),
+        "selection": {
+            "status": "SELECTION_READY",
+            "statement_kind": plan["statement_kind"],
+            "statement_title": document_index.SECTION_TITLES[plan["statement_kind"]],
+            "column_header": column_header,
+            "selection_basis": plan["selection_basis"],
+            "rows": [item.get("row_label") for item in requirement_rows
+                     if item["status"] == "VERIFIED"],
+        },
+        "coverage": coverage,
+        "facts": facts,
+        "reviews": reviews_out,
+        "publication": decision,
+        "limitations": limitations,
         "report_storage": "NOT_PERSISTED",
     }

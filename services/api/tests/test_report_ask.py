@@ -235,3 +235,47 @@ def test_signed_negative_row_publishes():
     assert result["status"] == "REPORT_READY"
     assert result["facts"][0]["value_verbatim"] == "-4,921,404.14"
     assert result["publication"]["research_publication"] == "FACTS_ONLY"
+
+
+def test_multi_requirement_report_covers_two_facts():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入和净利润分别是多少？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert result["report_type"] == "FACTS_ONLY_MULTI_REQUIREMENT_REPORT"
+    assert len(result["facts"]) == 2
+    assert result["coverage"]["complete"] is True
+    assert result["coverage"]["satisfied"] == 2
+    values = {fact["value_verbatim"] for fact in result["facts"]}
+    assert values == {"6,191,107,217.36", "468,144,459.10"}
+
+
+def test_multi_requirement_report_reports_a_missing_fact():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入和研发投入分别是多少？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert len(result["facts"]) == 1
+    assert result["coverage"]["complete"] is False
+    assert result["coverage"]["satisfied"] == 1
+    missing = [item for item in result["coverage"]["requirements"]
+               if item["status"] != "VERIFIED"]
+    assert missing and missing[0]["status"] == "NO_ROW_MATCH"
+
+
+def test_multi_requirement_comparison_is_blocked():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入和净利润相比如何？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "COMPARISON_NOT_PUBLISHABLE"
+    assert result["facts"] == []
