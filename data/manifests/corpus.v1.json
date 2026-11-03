@@ -1,0 +1,22 @@
+{
+  "schema_version": "corpus.v1",
+  "authorized_on": "2026-11-02",
+  "authorization_note": "Authorized local corpus for this repository only. Each document below is source-bound to an exact cninfo disclosure PDF identified by source_sha256 and canonical_sha256. Declaring a document here does not authorize redistribution, does not establish financial-semantic review, and does not permit publication. Documents are declared in priority order; the first entry is the M0a reference document.",
+  "acquisition_note": "PDFs are intentionally gitignored (.gitignore: data/raw/, *.pdf). A fresh clone must download each entry from source_url, verify source_sha256 with sha256sum, then verify canonical_sha256 with services/api/app/evidence/pdf_canonicalizer.py before any claim may cite it. Missing or unverifiable PDFs fail closed: no claim, preview, or report may fall back to a hardcoded source identity.",
+  "documents": [
+    {
+      "document_id": "600760-2026H1-cninfo-1225517994",
+      "ticker": "600760",
+      "issuer_name": "中航沈飞",
+      "report_period": "2026H1",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-28/1225517994.PDF",
+      "published_on": "2026-08-28",
+      "source_sha256": "d53ee98c091fdcbb8df3ebcc3f8d9bef87f61b374615dc3165dadb594f637d99",
+      "canonical_sha256": "620d3a30f73423527dd662e21ebf3367b546dfa6795c6fcf618f35ebf0008aa5",
+      "page_count": 207,
+      "pdf_path": "data/raw/600760/2026H1/source.pdf",
+      "authorization_note": "Authorized for local source-evidence verification and segment-table preview only. Segment revenue/cost rows are not established as consolidated income statement lines; financial_semantic_review is NOT_PERFORMED.",
+      "acquisition": "curl -fL -o data/raw/600760/2026H1/source.pdf <source_url> && shasum -a 256 data/raw/600760/2026H1/source.pdf"
+    }
+  ]
+}
