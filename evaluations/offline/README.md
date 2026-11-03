@@ -43,3 +43,11 @@ this development set.
 600760 2026H1 disclosure. Capture and score are separate; capture is label-blind.
 Results live in `M2A_BASELINE_V1.md`; captured traces stay in a private,
 untracked area and must never be committed.
+
+## M3 Experiment A — clarification baseline
+
+`m3_clarification_questions_dev_v1.json`, `run_m3_clarification_eval.py` and
+`test_m3_clarification_eval.py` measure metric-identity clarification on the
+600760 facts report. Capture drives the real `ask`/`ask/resolve` routes with a
+local token and does not read expectations; score is separate. Results are in
+`M3_CLARIFICATION_BASELINE_V1.md`; captured traces stay private and untracked.

@@ -1,0 +1,238 @@
+{
+  "schema_version": "frp-m3-clarification-dev-v1",
+  "corpus_type": "AUTHOR_CURATED_DEVELOPMENT_NOT_INDEPENDENT_HOLDOUT",
+  "scope": "600760_2026H1_CLARIFICATION",
+  "as_of": "2026-11-03T00:00:00+08:00",
+  "question_count": 12,
+  "source": {
+    "ticker": "600760",
+    "issuer": "中航沈飞",
+    "report_key": "600760-2026H1",
+    "document_id": "600760-2026H1-cninfo-1225517994",
+    "report_period": "2026H1",
+    "published_on": "2026-08-28",
+    "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-28/1225517994.PDF",
+    "source_sha256": "d53ee98c091fdcbb8df3ebcc3f8d9bef87f61b374615dc3165dadb594f637d99",
+    "canonical_sha256": "620d3a30f73423527dd662e21ebf3367b546dfa6795c6fcf618f35ebf0008aa5",
+    "pdf_pages": 207
+  },
+  "cases": [
+    {
+      "case_id": "M3-01",
+      "family": "revenue_explicit",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？",
+      "expected": {
+        "outcome": "PUBLISH",
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "column_header": "2026 年半年度",
+            "page_number": 46,
+            "value": "6,191,107,217.36"
+          }
+        ]
+      },
+      "rejection_category": null,
+      "expected_runtime_reasons": [],
+      "note": "Explicit literal row."
+    },
+    {
+      "case_id": "M3-02",
+      "family": "net_profit_explicit",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中净利润是多少？",
+      "expected": {
+        "outcome": "PUBLISH",
+        "cells": [
+          {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "column_header": "2026 年半年度",
+            "page_number": 47,
+            "value": "468,144,459.10"
+          }
+        ]
+      },
+      "rejection_category": null,
+      "expected_runtime_reasons": [],
+      "note": "Exact label; no clarification."
+    },
+    {
+      "case_id": "M3-03",
+      "family": "attributable_explicit",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中归属于母公司股东的净利润是多少？",
+      "expected": {
+        "outcome": "PUBLISH",
+        "cells": [
+          {
+            "row_label": "1.归属于母公司股东的净利润（净亏损以“-”号填列）",
+            "column_header": "2026 年半年度",
+            "page_number": 47,
+            "value": "473,065,863.24"
+          }
+        ]
+      },
+      "rejection_category": null,
+      "expected_runtime_reasons": [],
+      "note": "Specificity keeps only the attributable row."
+    },
+    {
+      "case_id": "M3-04",
+      "family": "synonym_revenue",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表的营收是多少？",
+      "expected": {
+        "outcome": "PUBLISH",
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "column_header": "2026 年半年度",
+            "page_number": 46,
+            "value": "6,191,107,217.36"
+          }
+        ]
+      },
+      "rejection_category": null,
+      "expected_runtime_reasons": [],
+      "note": "营收 -> 营业收入."
+    },
+    {
+      "case_id": "M3-05",
+      "family": "ambiguous_profit",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表的净利是多少？",
+      "expected": {
+        "outcome": "CLARIFY",
+        "required_option_cores": [
+          "净利润",
+          "归属于母公司股东的净利润"
+        ],
+        "resolutions": {
+          "净利润": {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "value": "468,144,459.10",
+            "page": 47
+          },
+          "归属于母公司股东的净利润": {
+            "row_label": "1.归属于母公司股东的净利润（净亏损以“-”号填列）",
+            "value": "473,065,863.24",
+            "page": 47
+          }
+        }
+      },
+      "rejection_category": "METRIC_IDENTITY_AMBIGUOUS",
+      "expected_runtime_reasons": [
+        "METRIC_IDENTITY_AMBIGUOUS"
+      ],
+      "note": "净利 is ambiguous; both source rows must be offered."
+    },
+    {
+      "case_id": "M3-06",
+      "family": "total_profit_explicit",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中利润总额是多少？",
+      "expected": {
+        "outcome": "PUBLISH",
+        "cells": [
+          {
+            "row_label": "四、利润总额（亏损总额以“-”号填列）",
+            "column_header": "2026 年半年度",
+            "page_number": 47,
+            "value": "565,393,924.81"
+          }
+        ]
+      },
+      "rejection_category": null,
+      "expected_runtime_reasons": [],
+      "note": "Annotated label matches."
+    },
+    {
+      "case_id": "M3-07",
+      "family": "comparison",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入比去年增长多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "COMPARISON_NOT_PUBLISHABLE",
+      "expected_runtime_reasons": [
+        "COMPARISON_NOT_PUBLISHABLE"
+      ],
+      "note": "Comparison never publishes."
+    },
+    {
+      "case_id": "M3-08",
+      "family": "forecast",
+      "question": "600760 中航沈飞 2026 全年营业收入预计多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "FORWARD_VIEW_NOT_PUBLISHABLE",
+      "expected_runtime_reasons": [
+        "FORWARD_VIEW_NOT_PUBLISHABLE"
+      ],
+      "note": "Forecast never publishes."
+    },
+    {
+      "case_id": "M3-09",
+      "family": "dual_scope",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表和母公司利润表的营业收入各是多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "STATEMENT_SCOPE_AMBIGUOUS",
+      "expected_runtime_reasons": [
+        "AMBIGUOUS_STATEMENT_SCOPE"
+      ],
+      "note": "Two statements; scope clarification is not in M3."
+    },
+    {
+      "case_id": "M3-10",
+      "family": "parent_blank",
+      "question": "600760 中航沈飞 2026 年半年度母公司利润表中营业收入是多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "NON_NUMERIC_CELL",
+      "expected_runtime_reasons": [
+        "SOURCE_CELL_BLANK_NOT_ZERO"
+      ],
+      "note": "Blank is not zero."
+    },
+    {
+      "case_id": "M3-11",
+      "family": "prior_period",
+      "question": "600760 中航沈飞 2025 年半年度合并利润表中营业收入是多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "PERIOD_OUT_OF_SCOPE",
+      "expected_runtime_reasons": [
+        "OUT_OF_PERIOD_SCOPE"
+      ],
+      "note": "Prior year out of scope."
+    },
+    {
+      "case_id": "M3-12",
+      "family": "off_topic",
+      "question": "600760 中航沈飞 2026 年半年度研发投入是多少？",
+      "expected": {
+        "outcome": "REJECT",
+        "cells": []
+      },
+      "rejection_category": "NO_SOURCE_ROW",
+      "expected_runtime_reasons": [
+        "NO_ROW_MATCH"
+      ],
+      "note": "Not a literal income-statement row; no clarification."
+    }
+  ],
+  "financial_answer_ground_truth": "CELL_EXPECTATIONS_DEV_ONLY",
+  "evidence_page_annotations": "CELL_LEVEL_DEV_ONLY",
+  "answerability_labels": "NONE",
+  "research_publication": "BLOCKED",
+  "notes": [
+    "Author-curated development set; not an independent holdout.",
+    "Expected outcomes are for offline scoring only and never enter runtime.",
+    "Clarification options must come from verified source rows; no invented labels."
+  ]
+}
