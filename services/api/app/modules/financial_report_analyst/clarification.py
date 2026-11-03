@@ -50,6 +50,13 @@ def option_id(document: CorpusDocument, statement_kind: str, row_label: str) -> 
     ).hexdigest()
 
 
+def scope_option_id(document: CorpusDocument, statement_kind: str) -> str:
+    return hashlib.sha256(
+        f"{document.document_id}|{document.canonical_sha256}|STATEMENT_SCOPE|"
+        f"{statement_kind}".encode("utf-8")
+    ).hexdigest()
+
+
 def _bigrams(text: str) -> set[str]:
     compact = _norm(text)
     return {
@@ -109,10 +116,12 @@ def _secret(env_token: str) -> str:
 
 
 def sign_clarification(*, question: str, document: CorpusDocument,
-                       report_key: str, statement_kind: str,
-                       option_ids: list[str], secret: str) -> str:
+                       report_key: str, statement_kind: str | None,
+                       option_ids: list[str], secret: str,
+                       kind: str = "METRIC_IDENTITY") -> str:
     payload = {
         "v": TOKEN_VERSION,
+        "kind": kind,
         "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
         "document_id": document.document_id,
         "canonical_sha256": document.canonical_sha256,
@@ -145,7 +154,8 @@ def verify_clarification(token: str, secret: str) -> dict:
     except ValueError:
         raise ValueError("CLARIFICATION_TOKEN_INVALID") from None
     if (not isinstance(payload, dict) or payload.get("v") != TOKEN_VERSION
-            or not isinstance(payload.get("option_ids"), list)):
+            or not isinstance(payload.get("option_ids"), list)
+            or payload.get("kind") not in {"METRIC_IDENTITY", "STATEMENT_SCOPE"}):
         raise ValueError("CLARIFICATION_TOKEN_INVALID")
     issued_at = payload.get("issued_at")
     now = int(time.time())
@@ -201,6 +211,7 @@ def build_clarification(
     )
     return {
         "status": "CLARIFICATION_REQUIRED",
+        "kind": "METRIC_IDENTITY",
         "reason": "METRIC_IDENTITY_AMBIGUOUS",
         "report_key": report_key,
         "document_id": document.document_id,
@@ -225,6 +236,54 @@ def build_clarification(
             ),
             "reason": interpretation_reason,
             "rationale": interpretation_rationale,
+        },
+        "financial_semantic_review": "NOT_PERFORMED",
+        "research_publication": "BLOCKED",
+    }
+
+
+def build_scope_clarification(
+    *,
+    report_key: str,
+    document: CorpusDocument,
+    present_kinds: list[str],
+    question: str,
+    secret: str,
+) -> dict | None:
+    """Ask which statement the question means, when both hold matching rows."""
+    kinds = [kind for kind in present_kinds if kind in SECTION_TITLES]
+    if not (2 <= len(kinds) <= 3):
+        return None
+    options = [
+        {
+            "option_id": scope_option_id(document, kind),
+            "statement_kind": kind,
+            "statement_title": SECTION_TITLES[kind],
+            "core": SECTION_TITLES[kind],
+            "row_label": SECTION_TITLES[kind],
+        }
+        for kind in kinds
+    ]
+    token = sign_clarification(
+        question=question, document=document, report_key=report_key,
+        statement_kind=None, option_ids=[option["option_id"] for option in options],
+        secret=secret, kind="STATEMENT_SCOPE",
+    )
+    return {
+        "status": "CLARIFICATION_REQUIRED",
+        "kind": "STATEMENT_SCOPE",
+        "reason": "STATEMENT_SCOPE_AMBIGUOUS",
+        "report_key": report_key,
+        "document_id": document.document_id,
+        "canonical_sha256": document.canonical_sha256,
+        "question": question,
+        "clarification_id": token,
+        "option_basis": "SOURCE_STATEMENTS",
+        "options": options,
+        "interpretation": {
+            "status": "NOT_PERFORMED",
+            "reason": None,
+            "rationale": None,
         },
         "financial_semantic_review": "NOT_PERFORMED",
         "research_publication": "BLOCKED",

@@ -63,15 +63,16 @@ def income_statement_index() -> dict:
         HEADER,
         ["一、营业收入", "", "", ""],
         ["减：营业成本", "", "", ""],
+        ["投资收益（损失以“-”号填列）", "", "1,405,326.00", "2,000,000.00"],
     ])
     return build_index(consolidated, parent)
 
 
-def select(question, *, index=None, hits=(), column=COLUMN, period="2026H1"):
+def select(question, *, index=None, hits=(), column=COLUMN, period="2026H1", forced=None):
     return qs.select_cells(
         index if index is not None else income_statement_index(),
         question=question, report_period=period, column_header=column,
-        retrieval_hits=list(hits),
+        retrieval_hits=list(hits), forced_statement_kind=forced,
     )
 
 
@@ -108,11 +109,14 @@ def test_titleless_question_uses_retrieval_rank_with_sufficient_margin():
     assert out["trace"]["selection_basis"] == "RETRIEVAL_PAGE_PRIORITY"
 
 
-def test_titleless_question_without_hits_is_withheld():
+def test_titleless_question_without_hits_is_ambiguous():
     out = select("营业收入是多少？")
 
     assert out["status"] == "SELECTION_WITHHELD"
-    assert out["reason"] == "NO_STATEMENT_SCOPE"
+    assert out["reason"] == "AMBIGUOUS_STATEMENT_SCOPE"
+    assert out["trace"]["present_statement_kinds"] == [
+        "consolidated_income_statement", "parent_income_statement"
+    ]
 
 
 def test_other_reporting_year_is_out_of_scope():
@@ -195,3 +199,18 @@ def test_profit_synonym_is_not_auto_mapped():
     assert out["reason"] == "NO_ROW_MATCH"
     assert out["trace"]["synonyms_applied"] == []
 
+
+def test_metric_unique_to_one_statement_selects_it():
+    out = select("2026年半年度投资收益是多少？")
+
+    assert out["status"] == "SELECTION_READY"
+    assert out["statement_kind"] == "parent_income_statement"
+    assert out["trace"]["selection_basis"] == "ROW_UNIQUE_STATEMENT"
+
+
+def test_forced_statement_kind_skips_scope_inference():
+    out = select("营业收入是多少？", forced="parent_income_statement")
+
+    assert out["status"] == "SELECTION_READY"
+    assert out["statement_kind"] == "parent_income_statement"
+    assert out["trace"]["selection_basis"] == "USER_RESOLVED_STATEMENT_SCOPE"

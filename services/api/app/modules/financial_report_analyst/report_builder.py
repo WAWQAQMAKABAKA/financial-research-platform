@@ -297,6 +297,7 @@ def build_report_from_question(
     *,
     as_of: datetime,
     forced_selection: dict | None = None,
+    forced_statement_kind: str | None = None,
 ) -> dict:
     """Question -> retrieval -> statement rows -> verified cells -> policy.
 
@@ -408,6 +409,7 @@ def build_report_from_question(
         selection = question_selection.select_cells(
             index, question=question, report_period=document.report_period,
             column_header=column_header, retrieval_hits=retrieval_trace["hits"],
+            forced_statement_kind=forced_statement_kind,
         )
     selection_trace = _selection_trace(selection)
     if selection["status"] != "SELECTION_READY":

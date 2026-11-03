@@ -98,35 +98,6 @@ def _section_pages(index: dict) -> dict[str, set[int]]:
     return pages
 
 
-def _statement_scope(
-    *,
-    question: str,
-    present: list[str],
-    section_pages: dict[str, set[int]],
-    retrieval_hits: list[dict],
-) -> tuple[str | None, str | None]:
-    explicit = [kind for kind in present
-                if _norm(SECTION_TITLES[kind]) in question]
-    if len(explicit) == 1:
-        return explicit[0], None
-    if len(explicit) > 1:
-        return None, "AMBIGUOUS_STATEMENT_SCOPE"
-
-    weights = {kind: 0.0 for kind in present}
-    for rank, hit in enumerate(retrieval_hits):
-        page = hit.get("page_number")
-        for kind in present:
-            if page in section_pages[kind]:
-                weights[kind] += 1.0 / (rank + 1)
-
-    ranked = sorted(weights.items(), key=lambda item: -item[1])
-    if not ranked or ranked[0][1] <= 0:
-        return None, "NO_STATEMENT_SCOPE"
-    if len(ranked) == 1 or ranked[0][1] >= 2 * ranked[1][1]:
-        return ranked[0][0], None
-    return None, "AMBIGUOUS_STATEMENT_SCOPE"
-
-
 def _row_labels(index: dict, kind: str) -> list[str]:
     labels: list[str] = []
     seen: set[str] = set()
@@ -165,6 +136,52 @@ def _column_available(index: dict, kind: str, column_header: str) -> bool:
     return len(matches) == 1 and matches[0] > 0
 
 
+def _row_matches(index: dict, kind: str, normalized_question: str) -> list[dict]:
+    matches = []
+    for label in _row_labels(index, kind):
+        core = row_label_core(label)
+        if len(core) >= 2 and core in normalized_question:
+            matches.append({"row_label": label, "core": core, "match_chars": len(core)})
+    matches.sort(key=lambda item: (-item["match_chars"], item["row_label"]))
+    return matches
+
+
+def _resolve_statement_scope(
+    *,
+    question_norm: str,
+    present: list[str],
+    section_pages: dict[str, set[int]],
+    retrieval_hits: list[dict],
+    matches_by_kind: dict[str, list[dict]],
+) -> tuple[str | None, str | None, str | None]:
+    """Title first, then a row that exists in one statement, then retrieval rank."""
+    explicit = [kind for kind in present
+                if _norm(SECTION_TITLES[kind]) in question_norm]
+    if len(explicit) == 1:
+        return explicit[0], "QUESTION_STATEMENT_TITLE", None
+    if len(explicit) > 1:
+        return None, None, "AMBIGUOUS_STATEMENT_SCOPE"
+
+    with_rows = [kind for kind in present if matches_by_kind.get(kind)]
+    if len(with_rows) == 1:
+        return with_rows[0], "ROW_UNIQUE_STATEMENT", None
+    if not with_rows:
+        return None, None, "NO_ROW_MATCH"
+
+    weights = {kind: 0.0 for kind in with_rows}
+    for rank, hit in enumerate(retrieval_hits):
+        page = hit.get("page_number")
+        for kind in with_rows:
+            if page in section_pages[kind]:
+                weights[kind] += 1.0 / (rank + 1)
+
+    ranked = sorted(weights.items(), key=lambda item: -item[1])
+    if (ranked and ranked[0][1] > 0
+            and (len(ranked) == 1 or ranked[0][1] >= 2 * ranked[1][1])):
+        return ranked[0][0], "RETRIEVAL_PAGE_PRIORITY", None
+    return None, None, "AMBIGUOUS_STATEMENT_SCOPE"
+
+
 def select_cells(
     index: dict,
     *,
@@ -172,6 +189,7 @@ def select_cells(
     report_period: str,
     column_header: str,
     retrieval_hits: list[dict] | None = None,
+    forced_statement_kind: str | None = None,
 ) -> dict:
     """Derive a source-bound selection from the question.
 
@@ -203,40 +221,43 @@ def select_cells(
 
     section_pages = _section_pages(index)
     present = [kind for kind in INCOME_STATEMENT_KINDS if kind in section_pages]
+    trace["present_statement_kinds"] = list(present)
     if not present:
         return _withheld("NO_STATEMENT_SCOPE", trace)
 
-    kind, reason = _statement_scope(
-        question=question_norm,
-        present=present,
-        section_pages=section_pages,
-        retrieval_hits=list(retrieval_hits or []),
-    )
-    if kind is None:
-        return _withheld(reason or "NO_STATEMENT_SCOPE", trace)
+    matches_by_kind = {
+        kind: _row_matches(index, kind, normalized_question) for kind in present
+    }
+    trace["row_match_counts"] = {
+        kind: len(rows) for kind, rows in matches_by_kind.items()
+    }
+
+    if forced_statement_kind is not None:
+        if forced_statement_kind not in present:
+            return _withheld("NO_STATEMENT_SCOPE", trace)
+        kind = forced_statement_kind
+        basis = "USER_RESOLVED_STATEMENT_SCOPE"
+    else:
+        kind, basis, reason = _resolve_statement_scope(
+            question_norm=question_norm,
+            present=present,
+            section_pages=section_pages,
+            retrieval_hits=list(retrieval_hits or []),
+            matches_by_kind=matches_by_kind,
+        )
+        if kind is None:
+            return _withheld(reason or "NO_STATEMENT_SCOPE", trace)
     trace["statement_kind"] = kind
     trace["statement_title"] = SECTION_TITLES[kind]
-    trace["selection_basis"] = (
-        "QUESTION_STATEMENT_TITLE"
-        if _norm(SECTION_TITLES[kind]) in question_norm
-        else "RETRIEVAL_PAGE_PRIORITY"
-    )
+    trace["selection_basis"] = basis
 
     if not _column_available(index, kind, column_header):
         return _withheld("COLUMN_HEADER_UNAVAILABLE", trace)
 
     labels = _row_labels(index, kind)
     trace["row_labels_considered"] = len(labels)
+    matches = matches_by_kind.get(kind, [])
 
-    matches = []
-    for label in labels:
-        core = row_label_core(label)
-        if len(core) < 2:
-            continue
-        if core in normalized_question:
-            matches.append({"row_label": label, "core": core, "match_chars": len(core)})
-
-    matches.sort(key=lambda item: (-item["match_chars"], item["row_label"]))
     trace["row_candidates"] = [
         {"row_label": item["row_label"], "core": item["core"]}
         for item in matches

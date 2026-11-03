@@ -127,6 +127,7 @@ type WithheldReport = {
 
 type Clarification = {
   status: "CLARIFICATION_REQUIRED";
+  kind?: string;
   reason: string;
   question: string;
   clarification_id: string;
@@ -344,11 +345,16 @@ function FactCard({ fact }: { fact: Fact }) {
 }
 
 function ClarificationBody({ clarification }: { clarification: Clarification }) {
+  const isScope = clarification.kind === "STATEMENT_SCOPE";
   return (
     <>
       <section className={styles.boundary} aria-label="需要澄清">
-        <strong>需要澄清 · 请选择指标</strong>
-        <p>问题中的指标在原文里对应多个行项目，选择后继续核验并生成事实报告。</p>
+        <strong>{isScope ? "需要澄清 · 请选择报表范围" : "需要澄清 · 请选择指标"}</strong>
+        <p>
+          {isScope
+            ? "问题未注明报表名称，合并与母公司利润表中都存在匹配行项目，选择后继续核验。"
+            : "问题中的指标在原文里对应多个行项目，选择后继续核验并生成事实报告。"}
+        </p>
         {clarification.interpretation?.rationale ? (
           <p className={styles.muted}>解释（模型提议，未核验）：{clarification.interpretation.rationale}</p>
         ) : null}
@@ -362,8 +368,12 @@ function ClarificationBody({ clarification }: { clarification: Clarification }) 
             `&option_id=${encodeURIComponent(option.option_id)}`;
           return (
             <a key={option.option_id} className={styles.clarifyOption} href={href}>
-              <strong>{option.core}</strong>
-              <span>{option.statement_title} · {compact(option.row_label)}</span>
+              <strong>{isScope ? option.statement_title : option.core}</strong>
+              <span>
+                {isScope
+                  ? "报表范围"
+                  : `${option.statement_title} · ${compact(option.row_label)}`}
+              </span>
             </a>
           );
         })}

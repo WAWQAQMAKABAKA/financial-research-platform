@@ -151,3 +151,38 @@ def test_build_clarification_returns_none_when_unresolvable():
     )
 
     assert result is None
+
+
+def test_scope_option_ids_are_stable_and_distinct():
+    first = cl.scope_option_id(document(), "consolidated_income_statement")
+    second = cl.scope_option_id(document(), "parent_income_statement")
+
+    assert first != second
+    assert first == cl.scope_option_id(document(), "consolidated_income_statement")
+
+
+def test_build_scope_clarification_offers_both_statements():
+    result = cl.build_scope_clarification(
+        report_key="600760-2026H1", document=document(),
+        present_kinds=["consolidated_income_statement", "parent_income_statement"],
+        question="营业收入是多少？", secret="secret",
+    )
+
+    assert result["status"] == "CLARIFICATION_REQUIRED"
+    assert result["kind"] == "STATEMENT_SCOPE"
+    assert result["reason"] == "STATEMENT_SCOPE_AMBIGUOUS"
+    assert [option["statement_title"] for option in result["options"]] == [
+        "合并利润表", "母公司利润表"
+    ]
+    payload = cl.verify_clarification(result["clarification_id"], "secret")
+    assert payload["kind"] == "STATEMENT_SCOPE"
+    assert payload["statement_kind"] is None
+
+
+def test_metric_token_defaults_to_metric_kind():
+    token = cl.sign_clarification(
+        question="q", document=document(), report_key="600760-2026H1",
+        statement_kind="consolidated_income_statement",
+        option_ids=["a" * 64, "b" * 64], secret="secret",
+    )
+    assert cl.verify_clarification(token, "secret")["kind"] == "METRIC_IDENTITY"

@@ -65,3 +65,18 @@ failed question cannot display a number from a neighbouring statement.
   `SELECTION_MISMATCH`.
 - Response time drops to roughly 12–25 seconds per question because the table
   scan is bounded to the selected statement kinds.
+
+## M3 update — statement-scope clarification
+
+The original rule is unchanged when the question is decisive: an explicit
+statement title wins, a row that exists in only one statement selects that
+statement (`ROW_UNIQUE_STATEMENT`), and a 2× retrieval margin may still break a
+tie (`RETRIEVAL_PAGE_PRIORITY`).
+
+What changed: when both income statements contain a matching row and the
+retrieval margin is **not** decisive, the platform now offers a statement-scope
+clarification (合并利润表 / 母公司利润表) instead of rejecting. It reuses the
+same signed token, TTL and resume path as metric clarification; the chosen
+statement is passed as `forced_statement_kind` and still goes through row
+selection, literal review and the publication policy. A question that explicitly
+names both statements remains a rejected multi-statement request, not a choice.

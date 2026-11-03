@@ -608,6 +608,23 @@ _M3_CLARIFY_LLM_COUNT = 0
 _M3_CLARIFY_LLM_LOCK = Lock()
 
 
+def _attempt_scope_clarification(
+    report_key: str, question: str, present_kinds: list[str],
+) -> dict | None:
+    """Ask which statement the question means; options are statement titles."""
+    from app.evidence import corpus_manifest
+    from app.modules.financial_report_analyst import clarification
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    secret = clarification._secret(
+        os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    )
+    return clarification.build_scope_clarification(
+        report_key=report_key, document=document,
+        present_kinds=present_kinds, question=question, secret=secret,
+    )
+
+
 def _attempt_clarification(
     report_key: str,
     pdf_path: str,
@@ -705,16 +722,31 @@ def local_facts_report_ask(
         logging.getLogger(__name__).exception("Question report unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
 
-    if (result.get("status") == "REPORT_WITHHELD"
-            and result.get("reason") == "NO_ROW_MATCH"):
-        statement_kind = (result.get("selection") or {}).get("trace", {}).get("statement_kind")
-        if statement_kind:
-            clarification = _attempt_clarification(
-                report_key, pdf_path, request.question,
-                statement_kind=statement_kind, as_of=as_of,
-            )
-            if clarification is not None:
-                return clarification
+    if result.get("status") == "REPORT_WITHHELD":
+        trace = (result.get("selection") or {}).get("trace") or {}
+        if result.get("reason") == "NO_ROW_MATCH":
+            statement_kind = trace.get("statement_kind")
+            if statement_kind:
+                clarification = _attempt_clarification(
+                    report_key, pdf_path, request.question,
+                    statement_kind=statement_kind, as_of=as_of,
+                )
+                if clarification is not None:
+                    return clarification
+        elif result.get("reason") == "AMBIGUOUS_STATEMENT_SCOPE":
+            present = trace.get("present_statement_kinds") or []
+            compact = "".join(request.question.split())
+            titles = [
+                document_index_title for document_index_title in (
+                    "合并利润表", "母公司利润表",
+                ) if document_index_title in compact
+            ]
+            if not titles and present:
+                scope = _attempt_scope_clarification(
+                    report_key, request.question, present,
+                )
+                if scope is not None:
+                    return scope
     return result
 
 
@@ -761,18 +793,39 @@ def local_facts_report_resolve(
             as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
             section_kinds=frozenset(question_selection.INCOME_STATEMENT_KINDS),
         )
-        closed = clarification.closed_options(index, document, payload["statement_kind"])
     except Exception:
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
 
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    if payload.get("kind") == "STATEMENT_SCOPE":
+        present = {
+            section["section_kind"] for section in index.get("sections", [])
+            if section.get("section_kind") in question_selection.INCOME_STATEMENT_KINDS
+        }
+        chosen = next(
+            (kind for kind in present
+             if clarification.scope_option_id(document, kind) == request.option_id),
+            None,
+        )
+        if chosen is None:
+            raise HTTPException(status_code=422, detail="Clarification unavailable")
+        try:
+            return report_builder.build_report_from_question(
+                report_key, Path(pdf_path), request.question, as_of=now,
+                forced_statement_kind=chosen,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Resolve report unavailable")
+            raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+    closed = clarification.closed_options(index, document, payload["statement_kind"])
     option = next((o for o in closed if o["option_id"] == request.option_id), None)
     if option is None:
         raise HTTPException(status_code=422, detail="Clarification unavailable")
 
     try:
         return report_builder.build_report_from_question(
-            report_key, Path(pdf_path), request.question,
-            as_of=datetime.now(ZoneInfo("Asia/Shanghai")),
+            report_key, Path(pdf_path), request.question, as_of=now,
             forced_selection={
                 "statement_kind": option["statement_kind"],
                 "row_label": option["row_label"],

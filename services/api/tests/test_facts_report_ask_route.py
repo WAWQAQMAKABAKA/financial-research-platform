@@ -174,3 +174,74 @@ def test_resolve_rejects_unoffered_option(monkeypatch):
     clarification = ask_net_profit().json()
     result = resolve(NET_PROFIT_QUESTION, clarification["clarification_id"], "f" * 64)
     assert result.status_code == 422
+
+
+def test_scope_resolve_runs_the_chosen_statement(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    from hashlib import sha256
+    from app.evidence.corpus_manifest import load_corpus_manifest
+    from app.modules.financial_report_analyst import clarification as cl
+
+    document = load_corpus_manifest().require_report_key("600760-2026H1")
+    secret = sha256(TOKEN.encode("utf-8")).hexdigest()
+    ids = [
+        cl.scope_option_id(document, "consolidated_income_statement"),
+        cl.scope_option_id(document, "parent_income_statement"),
+    ]
+    token = cl.sign_clarification(
+        question="营业收入是多少？", document=document, report_key="600760-2026H1",
+        statement_kind=None, option_ids=ids, secret=secret, kind="STATEMENT_SCOPE",
+    )
+
+    result = resolve("营业收入是多少？", token, ids[0])
+    assert result.status_code == 200
+    report = result.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["facts"][0]["value_verbatim"] == "6,191,107,217.36"
+    assert report["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_STATEMENT_SCOPE"
+
+
+def test_dual_statement_question_is_still_rejected(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+
+    response = TestClient(app).post(
+        ASK_URL,
+        json={"question": "600760 中航沈飞 2026 年半年度合并利润表和母公司利润表的营业收入各是多少？"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "REPORT_WITHHELD"
+    assert body["reason"] == "AMBIGUOUS_STATEMENT_SCOPE"
+
+
+def test_ask_offers_scope_choice_and_resolve_publishes(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+
+    asked = TestClient(app).post(
+        ASK_URL, json={"question": "利润总额是多少？"}, headers=headers,
+    )
+    assert asked.status_code == 200
+    clarification = asked.json()
+    assert clarification["status"] == "CLARIFICATION_REQUIRED"
+    assert clarification["kind"] == "STATEMENT_SCOPE"
+    assert [o["statement_title"] for o in clarification["options"]] == [
+        "合并利润表", "母公司利润表"
+    ]
+    consolidated = clarification["options"][0]
+
+    resolved = resolve("利润总额是多少？", clarification["clarification_id"],
+                       consolidated["option_id"])
+    assert resolved.status_code == 200
+    report = resolved.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["facts"][0]["value_verbatim"] == "565,393,924.81"
+    assert report["selection"]["trace"]["selection_basis"] == "USER_RESOLVED_STATEMENT_SCOPE"
