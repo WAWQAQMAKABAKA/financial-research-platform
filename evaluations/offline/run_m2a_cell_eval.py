@@ -55,6 +55,9 @@ RUNTIME_FILES = (
 
 # Runtime rejection reason -> financial-semantic category used by the scorecard.
 REASON_CATEGORY = {
+    "COMPARISON_NOT_PUBLISHABLE": "COMPARISON_NOT_PUBLISHABLE",
+    "FORWARD_VIEW_NOT_PUBLISHABLE": "FORWARD_VIEW_NOT_PUBLISHABLE",
+    "QUESTION_INTENT_AMBIGUOUS": "QUESTION_INTENT_AMBIGUOUS",
     "SOURCE_CELL_BLANK_NOT_ZERO": "NON_NUMERIC_CELL",
     "SOURCE_CELL_DASH_NOT_ZERO": "NON_NUMERIC_CELL",
     "OUT_OF_PERIOD_SCOPE": "PERIOD_OUT_OF_SCOPE",
@@ -351,8 +354,8 @@ def score(args: argparse.Namespace) -> int:
     records = {record["case_id"]: record for record in trace["cases"]}
     results = []
     unsafe = wrong_cell = exact = correct_rejection = false_rejection = 0
-    rejections = reason_exact = 0
-    category_hits = 0
+    rejections = reason_exact = reason_checked = 0
+    category_hits = category_checked = 0
     citation_ok = 0
     published_facts = 0
     recall = {1: 0, 3: 0, 5: 0}
@@ -389,21 +392,26 @@ def score(args: argparse.Namespace) -> int:
                 correct_rejection += 1
                 rejections += 1
                 reason = record.get("reason") or ""
-                if not case.get("expected_runtime_reasons"):
-                    category_hits += 1
-                    entry["category_match"] = "NOT_APPLICABLE"
-                    verdict = "CORRECT_REJECTION"
-                else:
-                    if reason in case["expected_runtime_reasons"]:
+                expected_reasons = case.get("expected_runtime_reasons") or []
+                if expected_reasons:
+                    reason_checked += 1
+                    if reason in expected_reasons:
                         reason_exact += 1
-                        verdict = "CORRECT_REJECTION"
-                    else:
-                        verdict = "CORRECT_REJECTION_REASON_DIFFERS"
-                    expected_category = case.get("rejection_category")
-                    actual_category = REASON_CATEGORY.get(reason)
+                expected_category = case.get("rejection_category")
+                actual_category = REASON_CATEGORY.get(reason)
+                if expected_category:
+                    category_checked += 1
                     category_hits += int(actual_category == expected_category)
-                    entry["actual_category"] = actual_category
-                entry["verdict"] = verdict
+                entry["actual_category"] = actual_category
+                entry["category_match"] = (
+                    None if not expected_category
+                    else actual_category == expected_category
+                )
+                entry["verdict"] = (
+                    "CORRECT_REJECTION"
+                    if not expected_reasons or reason in expected_reasons
+                    else "CORRECT_REJECTION_REASON_DIFFERS"
+                )
         else:
             if not published:
                 false_rejection += 1
@@ -459,8 +467,10 @@ def score(args: argparse.Namespace) -> int:
         "correct_rejection_rate": round(correct_rejection / reject_expected, 4) if reject_expected else None,
         "false_rejections": false_rejection,
         "false_rejection_rate": round(false_rejection / publish_expected, 4) if publish_expected else None,
-        "exact_reason_accuracy": round(reason_exact / rejections, 4) if rejections else None,
-        "rejection_category_accuracy": round(category_hits / rejections, 4) if rejections else None,
+        "exact_reason_accuracy": round(reason_exact / reason_checked, 4) if reason_checked else None,
+        "reason_checked_cases": reason_checked,
+        "rejection_category_accuracy": round(category_hits / category_checked, 4) if category_checked else None,
+        "category_checked_cases": category_checked,
         "citation_page_accuracy": round(citation_ok / (exact + wrong_cell), 4) if (exact + wrong_cell) else None,
         "retrieval_page_recall": {
             f"@{k}": (round(recall[k] / recall_cases, 4) if recall_cases else None)
