@@ -293,3 +293,22 @@ def test_multi_report_offers_a_bounded_repair_for_the_missing_facet():
     assert repair["facet"] == "研发投入"
     assert "研发费用" in {option["core"] for option in repair["options"]}
     assert repair["clarification_id"]
+
+
+def test_llm_facets_drive_the_multi_plan(monkeypatch):
+    monkeypatch.setattr(
+        rb.interpretation, "propose_facets",
+        lambda question, api_key: {
+            "status": "FACETS_READY", "facets": ["营业收入", "营业成本"],
+            "rationale": "两个指标。", "model": "deepseek-flash",
+        },
+    )
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入和营业成本分别是多少？",
+        as_of=AS_OF, api_key="key",
+    )
+
+    assert result["coverage"]["plan_source"] == "LLM_PROPOSAL_VALIDATED"
+    assert result["coverage"]["satisfied"] == 2
+    assert "5,535,215,299.31" in {fact["value_verbatim"] for fact in result["facts"]}

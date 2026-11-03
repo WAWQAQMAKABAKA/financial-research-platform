@@ -97,3 +97,25 @@ def test_titleless_multi_question_can_be_scope_ambiguous():
 
 def test_single_fact_question_has_no_plan():
     assert plan("营业收入是多少？") is None
+
+
+def test_proposed_facets_are_used_and_recorded():
+    result = ep.plan_requirements(
+        index(), question="合并利润表中营业收入和净利润分别是多少？",
+        report_period="2026H1", column_header=COLUMN,
+        proposed_facets=["营业收入", "净利润"],
+    )
+
+    assert result["facets_source"] == "LLM_PROPOSAL_VALIDATED"
+    assert [item["facet"] for item in result["requirements"]] == ["营业收入", "净利润"]
+    assert all(item["status"] == "SATISFIED" for item in result["requirements"])
+
+
+def test_invalid_proposed_facets_fall_back_to_split():
+    result = ep.plan_requirements(
+        index(), question="合并利润表中营业收入和净利润分别是多少？",
+        report_period="2026H1", column_header=COLUMN,
+        proposed_facets=["营业收入"],
+    )
+
+    assert result["facets_source"] == "DETERMINISTIC_SPLIT"

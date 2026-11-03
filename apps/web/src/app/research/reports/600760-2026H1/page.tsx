@@ -104,6 +104,7 @@ type Coverage = {
   satisfied: number;
   statement_kind: string;
   selection_basis: string;
+  plan_source?: string;
   requirements: CoverageRequirement[];
   repair?: CoverageRepair;
 };
@@ -522,6 +523,12 @@ async function ReportBody({ searchParams }: {
               <p className={styles.coverageLine}>
                 已满足 {report.coverage.satisfied}/{report.coverage.total}
                 {report.coverage.complete ? " · 完整" : " · 部分结果"}
+              </p>
+              <p className={styles.muted}>
+                拆分来源：
+                {report.coverage.plan_source === "LLM_PROPOSAL_VALIDATED"
+                  ? "模型提议（已校验）"
+                  : "确定性拆分"}
               </p>
               <ul className={styles.withheldList}>
                 {report.coverage.requirements.map((item) => (

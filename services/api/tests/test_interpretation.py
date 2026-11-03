@@ -102,3 +102,42 @@ def test_provider_echoed_metadata_is_ignored(monkeypatch):
 
     assert result["status"] == "INTERPRETATION_READY"
     assert result["candidate_option_ids"] == ["a" * 64, "b" * 64]
+
+
+def facet_response(payload):
+    return {
+        "model": interp.MODEL,
+        "choices": [{"finish_reason": "stop", "message": {
+            "content": json.dumps(payload, ensure_ascii=False),
+        }}],
+    }
+
+
+def test_propose_facets_returns_valid_split(monkeypatch):
+    monkeypatch.setattr(
+        deepseek_draft, "_send",
+        lambda body, api_key, client: facet_response({
+            "facets": ["营业收入", "净利润"], "rationale": "两个独立指标。",
+        }),
+    )
+    result = interp.propose_facets("营业收入和净利润分别是多少？", api_key="key")
+
+    assert result["status"] == "FACETS_READY"
+    assert result["facets"] == ["营业收入", "净利润"]
+
+
+def test_propose_facets_rejects_a_single_facet(monkeypatch):
+    monkeypatch.setattr(
+        deepseek_draft, "_send",
+        lambda body, api_key, client: facet_response({
+            "facets": ["营业收入"], "rationale": "x",
+        }),
+    )
+    result = interp.propose_facets("营业收入是多少？", api_key="key")
+
+    assert result["reason"] == "MODEL_FACETS_INVALID"
+
+
+def test_propose_facets_needs_a_key():
+    result = interp.propose_facets("营业收入和净利润分别是多少？", api_key="")
+    assert result["reason"] == "MODEL_NOT_CONFIGURED"

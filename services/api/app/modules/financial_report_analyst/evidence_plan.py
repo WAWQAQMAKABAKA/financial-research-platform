@@ -52,9 +52,14 @@ def plan_requirements(
     column_header: str,
     retrieval_hits: list[dict] | None = None,
     pinned_rows: dict[str, str] | None = None,
+    proposed_facets: list[str] | None = None,
 ) -> dict | None:
     """Return a plan, a scope-ambiguity signal, or None for single-fact questions."""
     facets = split_facets(question)
+    facets_source = "DETERMINISTIC_SPLIT"
+    if proposed_facets and 2 <= len(proposed_facets) <= MAX_REQUIREMENTS:
+        facets = list(proposed_facets)
+        facets_source = "LLM_PROPOSAL_VALIDATED"
     if len(facets) < 2:
         return None
 
@@ -124,6 +129,7 @@ def plan_requirements(
         "statement_kind": kind,
         "selection_basis": basis,
         "facets": facets,
+        "facets_source": facets_source,
         "present": present,
         "requirements": requirements,
     }

@@ -29,6 +29,7 @@ from app.modules.financial_report_analyst import (
     canonical_retrieval,
     clarification,
     evidence_plan,
+    interpretation,
     intent_gate,
     publication_policy,
     question_selection,
@@ -628,6 +629,7 @@ def build_multi_report(
     as_of: datetime,
     pinned_rows: dict[str, str] | None = None,
     repair_secret: str | None = None,
+    api_key: str | None = None,
 ) -> dict | None:
     """Two or three independent facts -> requirements -> coverage -> policy.
 
@@ -693,10 +695,18 @@ def build_multi_report(
                    "retrieval": retrieval_trace},
         )
 
+    proposed_facets = None
+    if api_key and evidence_plan.split_facets(question) and len(
+        evidence_plan.split_facets(question)
+    ) >= 2:
+        proposal = interpretation.propose_facets(question, api_key=api_key)
+        if proposal.get("status") == "FACETS_READY":
+            proposed_facets = proposal["facets"]
+
     plan = evidence_plan.plan_requirements(
         index, question=question, report_period=document.report_period,
         column_header=column_header, retrieval_hits=retrieval_trace["hits"],
-        pinned_rows=pinned_rows,
+        pinned_rows=pinned_rows, proposed_facets=proposed_facets,
     )
     if plan is None:
         return None
@@ -908,6 +918,7 @@ def build_multi_report(
         "satisfied": covered,
         "statement_kind": plan["statement_kind"],
         "selection_basis": plan["selection_basis"],
+        "plan_source": plan.get("facets_source", "DETERMINISTIC_SPLIT"),
         "requirements": requirement_rows,
     }
 

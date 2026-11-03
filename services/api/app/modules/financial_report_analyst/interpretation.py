@@ -150,3 +150,96 @@ def interpret(
         "financial_semantic_review": "NOT_PERFORMED",
         "research_publication": "BLOCKED",
     }
+
+
+FACETS_SYSTEM = """
+You split one Chinese financial-research question into independent disclosure-fact
+requirements. Return ONLY valid JSON with exactly two fields: facets, rationale.
+
+facets: 2 to 3 short Chinese noun phrases. Each names ONE metric the question asks
+for, in the source's own vocabulary where possible. Do not include comparisons,
+forecasts, causes, explanations, opinions, or values.
+
+rationale: one short Chinese sentence describing the split.
+
+Never answer the question, never provide numbers, never mention source pages.
+"""
+
+
+class FacetProposal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    facets: list[str]
+    rationale: str = Field(min_length=1, max_length=400)
+
+
+def propose_facets(question: str, *, api_key: str,
+                   client: httpx.Client | None = None) -> dict:
+    """At most one paid call; facets still resolve through the verified index."""
+    if not isinstance(question, str) or not (2 <= len(question) <= 240):
+        return {"status": "WITHHELD", "reason": "QUESTION_INVALID",
+                "facets": [], "rationale": None}
+    if not api_key or not api_key.strip():
+        return {"status": "WITHHELD", "reason": "MODEL_NOT_CONFIGURED",
+                "facets": [], "rationale": None}
+
+    body = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": FACETS_SYSTEM},
+            {"role": "user", "content": question},
+        ],
+        "thinking": {"type": "disabled"},
+        "response_format": {"type": "json_object"},
+        "temperature": 0,
+        "max_tokens": 384,
+        "stream": False,
+    }
+    own_client = client is None
+    if own_client:
+        proxy = os.environ.get("FRP_DEEPSEEK_PROXY") or None
+        client = httpx.Client(proxy=proxy, trust_env=proxy is None,
+                              timeout=45, follow_redirects=False)
+    try:
+        assert client is not None
+        response = deepseek_draft._send(body, api_key, client)
+    except deepseek_draft.ProviderFailure:
+        return {"status": "WITHHELD", "reason": "MODEL_PROVIDER_UNAVAILABLE",
+                "facets": [], "rationale": None}
+    finally:
+        if own_client and client is not None:
+            client.close()
+
+    try:
+        if response.get("model") != MODEL:
+            return {"status": "WITHHELD", "reason": "MODEL_MISMATCH",
+                    "facets": [], "rationale": None}
+        choices = response["choices"]
+        if (not isinstance(choices, list) or len(choices) != 1
+                or choices[0].get("finish_reason") != "stop"):
+            return {"status": "WITHHELD", "reason": "MODEL_RESPONSE_INCOMPLETE",
+                    "facets": [], "rationale": None}
+        content = choices[0]["message"]["content"]
+        if not isinstance(content, str) or len(content.encode("utf-8")) > 6000:
+            return {"status": "WITHHELD", "reason": "MODEL_CONTENT_INVALID",
+                    "facets": [], "rationale": None}
+        candidate = FacetProposal.model_validate_json(content)
+    except (KeyError, TypeError, ValueError, IndexError):
+        return {"status": "WITHHELD", "reason": "MODEL_PROPOSAL_INVALID",
+                "facets": [], "rationale": None}
+
+    facets = [facet.strip() for facet in candidate.facets
+              if isinstance(facet, str) and 2 <= len(facet.strip()) <= 120]
+    if (not 2 <= len(facets) <= 3
+            or len({facet for facet in facets}) != len(facets)):
+        return {"status": "WITHHELD", "reason": "MODEL_FACETS_INVALID",
+                "facets": [], "rationale": None}
+
+    return {
+        "status": "FACETS_READY",
+        "model": MODEL,
+        "facets": facets,
+        "rationale": candidate.rationale,
+        "interpretation_status": "UNVERIFIED_PROPOSAL",
+        "research_publication": "BLOCKED",
+    }
