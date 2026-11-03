@@ -85,6 +85,43 @@ option and only that resolution runs (~12 s).
   set an LLM proposal would return. The LLM path was not exercised in this run
   (no key, opt-in disabled).
 
+## v2 — opt-in LLM interpretation (same frozen set)
+
+Runtime `1207809` (provider metadata fix) with the eval support in `839a2ca`.
+Capture ran at `839a2ca`, one paid call (budget 4), 净利 only.
+
+| Metric | v1 deterministic | v2 LLM |
+|---|---|---|
+| Option basis | NEAR_MATCH | **LLM_PROPOSAL_VALIDATED** |
+| Options offered for 净利 | 4 | **3** |
+| Option recall | 1.0 | 1.0 |
+| Option precision | 0.5 | **0.6667** |
+| Resolution correctness | 2/2 | 2/2 |
+| Option binding | 3/3 | 2/2 |
+| Correct interpretations | 11/12 | 11/12 |
+| Unsafe publications | 0 | 0 |
+| Unnecessary clarifications | 0 | 0 |
+| Guessed when should clarify | 0 | 0 |
+| Latency avg / max | 15.4 s / 89.2 s | 15.2 s / 64.3 s |
+| Paid calls | 0 | 1 |
+
+v2 offered `净利润`, `归属于母公司股东的净利润`, `少数股东损益`, with the
+rationale “净利口径不明确，可能指合并净利润、归属于母公司股东的净利润或少数
+股东损益，需同时列出候选行。” All three ids were validated against the closed
+option set before display.
+
+**New finding:** resolving `少数股东损益` returned `LITERAL_REVIEW_NOT_PASSED`
+because its disclosed value is negative (`-4,921,404.14`) and the literal amount
+pattern accepts only unsigned decimals. The option is a real row and the binding
+is correct; the gap is in publication formatting, not clarification. Allowing
+signed amounts would change what may publish and needs a separate decision.
+
+**Fixed during this run:** the provider echoes `response_format` as an extra
+`"type"` field; `extra="forbid"` made a valid proposal fail and silently fall
+back to the deterministic options. Unknown metadata is now ignored (ids are
+still closed-set validated), and the clarification payload exposes the
+interpretation status/reason so failures are visible.
+
 ## Limitations
 
 - Single document, single period, 12 author-curated cases; not a holdout.
@@ -97,7 +134,7 @@ option and only that resolution runs (~12 s).
 
 ## Next
 
-1. Run the same frozen set with the opt-in LLM path enabled (budget 4) and
-   compare option quality and rationale.
+1. Decide whether signed (negative) disclosed amounts may publish; today they
+   are rejected by the literal amount pattern.
 2. Scope clarification (consolidated vs parent) as a separate slice.
 3. Multi-evidence requirements and coverage in M4; publication rules unchanged.
