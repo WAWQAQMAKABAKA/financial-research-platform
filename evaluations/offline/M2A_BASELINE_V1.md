@@ -150,6 +150,27 @@ Remaining gaps, reported rather than hidden:
 - Zero unsafe publication is a gate on this development set only, not a general
   error rate.
 
+## v3 — current runtime after scope clarification (`cb8df3b`)
+
+Same frozen set (`b7e2db37…`), 15 cases.
+
+| Metric | v2 | v3 |
+|---|---|---|
+| Unsafe publications | 0 | 0 |
+| Wrong-cell publications | 0 | 0 |
+| Exact cell matches | 8/8 | 8/8 |
+| Correct rejections | 7/7 | 7/7 |
+| Exact reason accuracy | 4/5 = 0.8 | **5/5 = 1.0** |
+| Rejection category accuracy | 5/7 = 0.7143 | 5/7 = 0.8571 (6/7) |
+| Recall @1/@3/@5 | 0.625/0.75/0.75 | unchanged |
+| Latency avg | 9.0 s | 9.3 s |
+
+M2A-15 (`研发投入`) now rejects with `NO_ROW_MATCH` instead of
+`AMBIGUOUS_STATEMENT_SCOPE`, because statement scope is no longer decided before
+the metric is checked. The frozen set was not edited. The remaining category
+mismatch is M2A-11: `净利` rejects as `NO_ROW_MATCH` rather than a dedicated
+metric-identity reason.
+
 ## What this does and does not show
 
 - The publication gate itself held: no unsafe publication came from the policy —
