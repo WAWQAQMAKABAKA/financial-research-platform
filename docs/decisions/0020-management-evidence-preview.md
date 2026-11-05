@@ -24,8 +24,14 @@ comparison, then ambiguity.
 - the management discussion section is located deterministically from the page
   headings (`管理层讨论与分析` up to the next `第…节`), so cover pages, governance
   and incentive tables are not offered as explanations;
-- lines in that section that contain both a question term and an explanation cue
-  are scored, de-duplicated and capped at three pointers;
+- question metric grams drop explanation stopwords, generic time/company grams
+  and digit-only grams, so `半年`, `年度` or `公司` cannot pull in unrelated prose;
+- the **first line** of a candidate must itself contain both a metric gram and an
+  explanation cue; a line without ending punctuation is joined with its next line
+  only when that next line is prose, and checkbox/number-only lines are skipped;
+- candidates are scored (metric hits, cue hits, an explanation-marker bonus for
+  `变动原因`/`主要是`/`主要系`/`原因说明`, a small digit penalty), de-duplicated and
+  capped at three pointers;
 - each pointer carries a page number, a verbatim page-text excerpt (the literal
   reviewer scope is `VERIFIED_PAGE_TEXT_SUBSTRING`) and an explicit
   `explanation_cue_present` flag;

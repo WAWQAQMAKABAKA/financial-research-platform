@@ -378,3 +378,33 @@ def test_management_question_returns_a_withheld_preview():
     assert preview["semantic_review"] == "NOT_PERFORMED"
     assert preview["pointers"]
     assert any("主要是受" in pointer["excerpt"] for pointer in preview["pointers"])
+
+
+def test_management_question_without_section_evidence_is_withheld():
+    result = rb.build_management_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度员工人数为什么变化？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "NO_MANAGEMENT_EVIDENCE"
+    assert result["facts"] == []
+    assert "management_preview" not in result
+
+
+def test_management_preview_stays_inside_the_discussion_section():
+    result = rb.build_management_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度净利润为什么下降？",
+        as_of=AS_OF,
+    )
+
+    pointers = result["management_preview"]["pointers"]
+    assert pointers
+    assert all(8 <= pointer["page_number"] <= 17 for pointer in pointers)
+    assert any(
+        "利润" in pointer["excerpt"]
+        and ("下滑" in pointer["excerpt"] or "下降" in pointer["excerpt"])
+        for pointer in pointers
+    )

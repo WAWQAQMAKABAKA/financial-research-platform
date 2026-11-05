@@ -1035,9 +1035,27 @@ def _management_section_pages(path: Path) -> set[int]:
         return set(range(start, end or (start + 10)))
 
 
+_QUESTION_STOPWORDS = (
+    "为什么", "为何", "原因", "解释", "说明", "管理层讨论", "经营讨论",
+    "变动原因", "什么原因", "如何解释", "怎么解释", "是什么", "多少",
+    "如何", "怎么", "下降", "减少", "变动", "上升", "增加", "影响",
+    "增长", "下滑", "由于", "主要系", "变化",
+)
+
+
 def _question_grams(question: str) -> set[str]:
     normalized = re.sub(r"\s+", "", unicodedata.normalize("NFKC", question))
-    return {normalized[index:index + 2] for index in range(len(normalized) - 1)}
+    for word in _QUESTION_STOPWORDS:
+        normalized = normalized.replace(word, "")
+    generic = {
+        "半年", "年度", "年半", "中航", "航沈", "沈飞", "公司", "报告",
+        "期内", "本期", "情况", "人数",
+    }
+    grams = {normalized[index:index + 2] for index in range(len(normalized) - 1)}
+    return {
+        gram for gram in grams
+        if not any(ch.isdigit() for ch in gram) and gram not in generic
+    }
 
 
 def build_management_report(
@@ -1100,24 +1118,51 @@ def build_management_report(
     with pymupdf.open(path) as pdf:
         for page in sorted(section_pages):
             text = pdf[page - 1].get_text("text")
-            for line in text.splitlines():
-                excerpt = line.strip()
-                compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt))
-                if len(compact) < 16:
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            for index in range(len(lines)):
+                line = lines[index]
+                if (line.startswith(("√", "□", "-", "－"))
+                        or sum("\u4e00" <= ch <= "\u9fff" for ch in line) < 6):
                     continue
-                metric_hits = sum(1 for gram in grams if gram in compact)
-                cue_hits = sum(1 for cue in explanation_cues if cue in compact)
-                if not metric_hits or not cue_hits:
+                next_line = lines[index + 1] if index + 1 < len(lines) else None
+                noisy_next = next_line is None or (
+                    next_line.startswith(("√", "□", "-", "－"))
+                    or sum("\u4e00" <= ch <= "\u9fff" for ch in next_line) < 6
+                )
+                if line.endswith(("。", "；", "：", "！", "？")) or noisy_next:
+                    spans = (1,)
+                else:
+                    spans = (2,)
+                first_compact = re.sub(
+                    r"\s+", "", unicodedata.normalize("NFKC", line)
+                )
+                if (not any(gram in first_compact for gram in grams)
+                        or not any(cue in first_compact for cue in explanation_cues)):
                     continue
-                digits = sum(ch.isdigit() for ch in compact)
-                score = metric_hits * 2 + cue_hits * 3 - digits * 0.05
-                candidates.append((score, page, excerpt))
+                for span in spans:
+                    excerpt = "\n".join(lines[index:index + span]).strip()
+                    compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt))
+                    if len(compact) < 16:
+                        continue
+                    metric_hits = sum(1 for gram in grams if gram in compact)
+                    cue_hits = sum(1 for cue in explanation_cues if cue in compact)
+                    if not metric_hits or not cue_hits:
+                        continue
+                    strong = any(
+                        marker in compact
+                        for marker in ("变动原因", "主要是", "主要系", "原因说明")
+                    )
+                    digits = sum(ch.isdigit() for ch in compact)
+                    score = metric_hits * 2 + cue_hits * 3 - digits * 0.05
+                    if strong:
+                        score += 4
+                    candidates.append((score, page, excerpt))
 
     candidates.sort(key=lambda item: (-item[0], item[1]))
     pointers = []
     seen = set()
     for _, page, excerpt in candidates:
-        key = (page, excerpt)
+        key = (page, re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt))[-20:])
         if key in seen:
             continue
         seen.add(key)
