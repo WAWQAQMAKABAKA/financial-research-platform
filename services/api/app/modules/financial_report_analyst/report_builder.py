@@ -34,6 +34,7 @@ from app.modules.financial_report_analyst import (
     interpretation,
     intent_gate,
     publication_policy,
+    semantic_review,
     question_selection,
     revenue_scope,
     source_workspace,
@@ -1133,6 +1134,7 @@ def build_management_report(
     question: str,
     *,
     as_of: datetime,
+    review_secret: str | None = None,
 ) -> dict:
     """Management questions get an evidence preview that is never published.
 
@@ -1180,6 +1182,20 @@ def build_management_report(
         )
 
     pointers = _management_preview_pointers(path, question)
+    packet = None
+    if review_secret and pointers:
+        top = pointers[0]
+        packet = semantic_review.build_packet(
+            secret=review_secret, question=question, report_key=report_key,
+            claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
+            page_number=top["page_number"], excerpt=top["excerpt"],
+            document={
+                "document_id": document.document_id,
+                "source_sha256": document.source_sha256,
+                "canonical_sha256": document.canonical_sha256,
+            },
+        )
+
     if not pointers:
         return _withheld(
             report_key, "NO_MANAGEMENT_EVIDENCE", document=document,
@@ -1228,6 +1244,9 @@ def build_management_report(
             "semantic_review": "NOT_PERFORMED",
             "pointers": pointers,
         },
+        "review_packet": packet,
+        "development_only": True,
+        "independent_validation": False,
         "publication": {
             "may_publish": False,
             "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
@@ -1249,6 +1268,7 @@ def build_mixed_report(
     question: str,
     *,
     as_of: datetime,
+    review_secret: str | None = None,
 ) -> dict | None:
     """One question with a fact sentence and a management sentence.
 
@@ -1313,6 +1333,21 @@ def build_mixed_report(
         "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
         "semantic_review": "NOT_PERFORMED",
     }
+    composed["review_packet"] = None
+    if review_secret and pointers:
+        top = pointers[0]
+        composed["review_packet"] = semantic_review.build_packet(
+            secret=review_secret, question=question, report_key=report_key,
+            claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
+            page_number=top["page_number"], excerpt=top["excerpt"],
+            document={
+                "document_id": document.document_id,
+                "source_sha256": document.source_sha256,
+                "canonical_sha256": document.canonical_sha256,
+            },
+        )
+    composed["development_only"] = True
+    composed["independent_validation"] = False
     composed["limitations"] = list(composed.get("limitations") or []) + [
         "管理层解释部分只作原文预览，未发布；语义审阅未执行。",
         "已发布的事实只覆盖事实子句，不覆盖解释子句。",

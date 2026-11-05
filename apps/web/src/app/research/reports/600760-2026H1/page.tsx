@@ -130,6 +130,7 @@ type Report = {
   request: { question: string; question_code: string | null };
   coverage?: Coverage;
   management_preview?: ManagementPreview | null;
+  review_packet?: ReviewPacket | null;
   management_publication?: { may_publish: boolean; reason: string } | null;
   retrieval?: Retrieval;
   selection?: Selection;
@@ -161,11 +162,24 @@ type ManagementPreview = {
   pointers: ManagementPointer[];
 };
 
+type ReviewPacket = {
+  packet_id: string;
+  claim_type: string;
+  claim_text: string;
+  evidence: { page_number: number; excerpt: string; excerpt_sha256: string };
+  checklist: { key: string; label: string }[];
+  allowed_reviewers: string[];
+  status: string;
+  development_only: boolean;
+  independent_validation: boolean;
+};
+
 type WithheldReport = {
   status: "REPORT_WITHHELD";
   reason: string;
   plan?: { status: string; detected: number; max: number } | null;
   management_preview?: ManagementPreview | null;
+  review_packet?: ReviewPacket | null;
   request?: { question: string; question_code: string | null } | null;
   retrieval?: Retrieval;
   selection?: Selection;
@@ -376,6 +390,33 @@ function Trace({ retrieval, selection, allowExcerpt = true }: {
   );
 }
 
+function ReviewPacketCard({ packet }: { packet: ReviewPacket }) {
+  return (
+    <section className={styles.reviewCard} aria-label="语义审阅包">
+      <p className={styles.kicker}>语义审阅包 / AWAITING DECISION</p>
+      <p className={styles.muted}>
+        开发环境 · 未经独立验证 · 平台不会自动决定
+      </p>
+      <p>
+        <strong>待审 claim：</strong>
+        {packet.claim_text}
+      </p>
+      <p className={styles.muted}>证据：第 {packet.evidence.page_number} 页</p>
+      <ul className={styles.withheldList}>
+        {packet.checklist.map((item) => (
+          <li key={item.key}>
+            <strong>{item.key}</strong>
+            <span>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+      <p className={styles.muted}>
+        允许的审阅人：{packet.allowed_reviewers.join("、")}。请显式选择 ADMIT / REJECT / UNCERTAIN。
+      </p>
+    </section>
+  );
+}
+
 function FactCard({ fact }: { fact: Fact }) {
   const citationUrl = `${fact.citation.source_url}#page=${fact.citation.page_number}`;
   return (
@@ -513,6 +554,9 @@ async function ReportBody({ searchParams }: {
                 识别到 {withheld.plan.detected} 个指标，当前最多支持 {withheld.plan.max} 个。
               </p>
             )}
+            {withheld.review_packet && (
+              <ReviewPacketCard packet={withheld.review_packet} />
+            )}
             {withheld.management_preview && (
               <div className={styles.managementPreview}>
                 <p className={styles.muted}>
@@ -575,6 +619,10 @@ async function ReportBody({ searchParams }: {
               </ul>
             </section>
           ) : null}
+
+          {report.review_packet && (
+            <ReviewPacketCard packet={report.review_packet} />
+          )}
 
           {report.coverage && (
             <section className={styles.reviewCard} aria-label="证据覆盖">

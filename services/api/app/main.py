@@ -571,6 +571,18 @@ def _require_facts_report_access(report_key: str, token: str | None) -> None:
         raise HTTPException(status_code=404, detail="Report not available")
 
 
+def _require_local_dev_token(token: str | None) -> None:
+    if os.environ.get("FRP_ENV", "").strip().casefold() in {
+        "production", "prod", "staging",
+    }:
+        raise HTTPException(status_code=404, detail="Not available")
+    if os.environ.get("FRP_LOCAL_FACTS_REPORT") != "1":
+        raise HTTPException(status_code=404, detail="Not available")
+    expected = os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "")
+    if (len(expected) < 32 or not token or not compare_digest(expected, token)):
+        raise HTTPException(status_code=404, detail="Not available")
+
+
 def _facts_report_pdf_path(report_key: str) -> str:
     pdf_path = os.environ.get(f"FRP_LOCAL_SOURCE_PDF_{report_key.split('-')[0]}")
     if not pdf_path:
@@ -693,6 +705,16 @@ def _attempt_clarification(
     )
 
 
+class SemanticReviewDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    packet_id: str = Field(min_length=16, max_length=8192)
+    reviewer_id: str = Field(min_length=2, max_length=120)
+    verdict: Literal["ADMIT", "REJECT", "UNCERTAIN"]
+    checklist: dict[str, bool]
+    rationale: str = Field(min_length=8, max_length=2000)
+
+
 class LocalClarificationResolveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -739,10 +761,12 @@ def local_facts_report_ask(
                 is report_builder.intent_gate.Intent.MANAGEMENT_EXPLANATION):
             result = report_builder.build_mixed_report(
                 report_key, Path(pdf_path), request.question, as_of=as_of,
+                review_secret=repair_secret,
             )
             if result is None:
                 result = report_builder.build_management_report(
                     report_key, Path(pdf_path), request.question, as_of=as_of,
+                    review_secret=repair_secret,
                 )
         elif len(evidence_plan.split_facets(request.question)) >= 2 or plan_api_key:
             result = report_builder.build_multi_report(
@@ -888,3 +912,102 @@ def local_facts_report_resolve(
     except Exception:
         logging.getLogger(__name__).exception("Resolve report unavailable")
         raise HTTPException(status_code=503, detail="SOURCE_UNAVAILABLE") from None
+
+
+@app.post("/api/v1/research/reviews/decide")
+def decide_semantic_review(
+    request: SemanticReviewDecisionRequest,
+    x_frp_local_token: str | None = Header(default=None),
+) -> dict:
+    """Record an explicit semantic-review decision; never decides on its own."""
+    _require_local_dev_token(x_frp_local_token)
+
+    from datetime import datetime
+    from hashlib import sha256
+    from pathlib import Path
+    from app.evidence import corpus_manifest
+    from app.modules.financial_report_analyst import semantic_review
+
+    secret = sha256(
+        os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "").encode("utf-8")
+    ).hexdigest()
+    try:
+        payload = semantic_review.verify_packet(request.packet_id, secret)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    allowlist = semantic_review.reviewers_from_env()
+    try:
+        review = semantic_review.validate_review(
+            payload,
+            reviewer_id=request.reviewer_id,
+            verdict=request.verdict,
+            checklist=request.checklist,
+            rationale=request.rationale,
+            allowlist=allowlist,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    storage = Path(
+        os.environ.get(
+            "FRP_SEMANTIC_REVIEW_STORAGE",
+            str(Path(__file__).resolve().parents[3] / "data/private/semantic-reviews"),
+        )
+    )
+    try:
+        record = semantic_review.record_review(
+            payload, review, storage_dir=storage,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+    decision = semantic_review.decide_development_publication(
+        payload, record, allowlist=allowlist,
+    )
+    if not decision["may_publish"]:
+        return {
+            "status": "REPORT_WITHHELD",
+            "reason": decision["reason"],
+            "publication": decision,
+            "review": record,
+            "development_only": True,
+            "independent_validation": False,
+            "limitations": [
+                "审阅结论未通过开发环境发布门槛；没有发布管理层解释。",
+            ],
+        }
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(
+        payload["report_key"]
+    )
+    if (document.document_id != payload.get("document_id")
+            or document.source_sha256 != payload.get("source_sha256")
+            or document.canonical_sha256 != payload.get("canonical_sha256")):
+        raise HTTPException(status_code=422, detail="REVIEW_SOURCE_MISMATCH")
+
+    return {
+        "status": "REPORT_READY",
+        "report_type": "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT",
+        "report_version": semantic_review.REVIEW_VERSION,
+        "development_only": True,
+        "independent_validation": False,
+        "report_key": payload["report_key"],
+        "claim": {
+            "claim_type": "MANAGEMENT_EXPLANATION",
+            "text": payload["claim_text"],
+            "evidence": {
+                "page_number": payload["page_number"],
+                "excerpt": payload["excerpt"],
+                "excerpt_sha256": payload["excerpt_sha256"],
+                "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
+            },
+        },
+        "review": record,
+        "publication": decision,
+        "limitations": [
+            "开发环境审阅（local-reviewer），未经独立验证；不得用于客户发布。",
+            "审阅只针对单条管理层解释 claim，不覆盖其他主张。",
+            "语义审阅由人做出；平台不自动生成 ADMIT。",
+        ],
+    }

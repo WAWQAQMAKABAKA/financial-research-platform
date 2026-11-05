@@ -327,3 +327,95 @@ def test_mixed_question_route_returns_fact_and_preview(monkeypatch):
     assert report["facts"]
     assert report["management_preview"]["pointers"]
     assert report["management_publication"]["may_publish"] is False
+
+
+MANAGEMENT_Q = "600760 中航沈飞 2026 年半年度营业收入变动原因是什么？"
+DECIDE_URL = "/api/v1/research/reviews/decide"
+from app.modules.financial_report_analyst.semantic_review import CHECKLIST_KEYS
+
+CHECKLIST = {key: True for key in CHECKLIST_KEYS}
+
+
+def management_packet(monkeypatch, tmp_path):
+    authorize(monkeypatch)
+    monkeypatch.setenv("FRP_SEMANTIC_REVIEW_STORAGE", str(tmp_path / "reviews"))
+    response = ask(question=MANAGEMENT_Q)
+    assert response.status_code == 200
+    return response.json()["review_packet"]
+
+
+def decide(packet, **overrides):
+    body = {
+        "packet_id": packet["packet_id"],
+        "reviewer_id": "local-reviewer",
+        "verdict": "ADMIT",
+        "checklist": CHECKLIST,
+        "rationale": "人工核对原文、指标、期间与主体一致。",
+    }
+    body.update(overrides)
+    return TestClient(app).post(
+        DECIDE_URL, json=body, headers={"x-frp-local-token": TOKEN},
+    )
+
+
+def test_management_question_pauses_at_the_review_packet(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    assert packet["status"] == "AWAITING_EXPLICIT_HUMAN_DECISION"
+    assert packet["development_only"] is True
+    assert packet["independent_validation"] is False
+    assert packet["evidence"]["page_number"] >= 1
+    assert not (tmp_path / "reviews").exists()
+
+
+def test_explicit_admit_records_a_development_only_review(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    response = decide(packet)
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["report_type"] == "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT"
+    assert report["development_only"] is True
+    assert report["independent_validation"] is False
+    assert report["claim"]["text"] == packet["claim_text"]
+    assert report["review"]["reviewer_id"] == "local-reviewer"
+    assert report["review"]["verdict"] == "ADMIT"
+
+
+def test_explicit_reject_withholds_publication(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    response = decide(packet, verdict="REJECT", checklist={key: False for key in CHECKLIST_KEYS})
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "REPORT_WITHHELD"
+    assert report["reason"] == "SEMANTIC_REVIEW_REJECTED"
+    assert report["publication"]["may_publish"] is False
+
+
+def test_unknown_reviewer_is_refused(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    response = decide(packet, reviewer_id="someone-else")
+    assert response.status_code == 422
+    assert "REVIEWER_NOT_ALLOWLISTED" in response.json()["detail"]
+
+
+def test_incomplete_checklist_cannot_admit(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    incomplete = dict(CHECKLIST)
+    incomplete["basis"] = False
+    response = decide(packet, checklist=incomplete)
+    assert response.status_code == 422
+    assert "REVIEW_CHECKLIST_NOT_MET" in response.json()["detail"]
+
+
+def test_a_tampered_packet_is_refused(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+
+    tampered = dict(packet)
+    tampered["packet_id"] = packet["packet_id"][:-4] + "0000"
+    response = decide(tampered)
+    assert response.status_code == 422
