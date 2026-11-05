@@ -58,3 +58,11 @@ local token and does not read expectations; score is separate. Results are in
 `test_m4_multi_eval.py` measure the multi-fact path: decomposition, per-requirement
 coverage, partial reports and the comparison/forecast gates. Results are in
 `M4_MULTI_BASELINE_V1.md`; captured traces stay private and untracked.
+
+## Experiment R — bounded repair
+
+`m4_repair_questions_dev_v1.json`, `run_m4_repair_eval.py` and
+`test_m4_repair_eval.py` measure the optional repair for a partial multi-fact
+report: candidate recall/order, confirmation success, clean partials and
+unexpected facts. Results are in `M4_REPAIR_BASELINE_V1.md`; captured traces
+stay private and untracked.
