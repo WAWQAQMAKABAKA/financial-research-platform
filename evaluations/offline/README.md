@@ -66,3 +66,10 @@ coverage, partial reports and the comparison/forecast gates. Results are in
 report: candidate recall/order, confirmation success, clean partials and
 unexpected facts. Results are in `M4_REPAIR_BASELINE_V1.md`; captured traces
 stay private and untracked.
+
+## Experiment W — wording where the conjunction split fails
+
+`m4_wording_questions_dev_v1.json`, `run_m4_wording_eval.py` and
+`test_m4_wording_eval.py` capture the same wording set with and without the LLM
+plan and measure cell recall, under-decomposition and over-answering. Results
+are in `M4_WORDING_BASELINE_V1.md`; captured traces stay private.
