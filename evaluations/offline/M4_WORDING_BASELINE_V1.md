@@ -63,6 +63,38 @@ RUN=data/private/m4-wording-eval/run_$(date -u +%Y%m%dT%H%M%SZ)_det
   question remains unanswered.
 - No under-decomposition and no over-answer appeared in either run.
 
+## v2 — six-requirement ceiling (`ab49889`)
+
+The set now has five cases (`49f7b892…`): the four wording cases plus a
+seven-metric question that must be rejected with its count. The plan and the
+single-path row match both accept up to six requirements.
+
+**Deterministic capture (measured):**
+
+| Metric | v2 deterministic |
+|---|---|
+| Cell recall | **0.8333 (10/12)** |
+| Complete reports | 1 (W-04, four metrics) |
+| Single-report answers | 2 (W-01, W-02) |
+| Under-decomposition | 0 |
+| Over-answer / unsafe | 0 |
+| Over-limit correctly rejected | **1** (W-05, detected 7) |
+| Latency avg / max | 41.3 s / 56.9 s (host load up to 22) |
+
+| Case | Result |
+|---|---|
+| W-01 | 2 facts in one single report (no coverage) |
+| W-02 | 3 facts in one single report (no coverage) |
+| W-03 | partial 1 fact, deterministic split still mis-parses the pair |
+| W-04 | **COMPLETE 4/4** — dynamic ceiling admits the fourth metric |
+| W-05 | **OVER_LIMIT_REJECTED** — `TOO_MANY_REQUIREMENTS`, detected 7, max 6 |
+
+**LLM capture v2: NOT_MEASURED.** W-01 completed 2/2 with
+`LLM_PROPOSAL_VALIDATED`, but the host was starved (load average 10–22, score
+and capture processes descheduled for tens of minutes) and the five-case run was
+stopped before completing. This is an environment limitation, not a product
+result.
+
 ## Limitations
 
 - Four cases, one document; not a holdout.
@@ -74,7 +106,7 @@ RUN=data/private/m4-wording-eval/run_$(date -u +%Y%m%dT%H%M%SZ)_det
 
 ## Next
 
-1. Decide whether the plan cap should be 4 (with a coverage note) or stay 3 with
-   an explicit "question has more metrics than supported" rejection.
+1. Re-run the LLM v2 capture when the host is idle; the deterministic result and
+   the over-limit rejection are already measured.
 2. Management-text requirements as a separate evidence kind.
 3. Unseen-document validation once a second document is authorized.
