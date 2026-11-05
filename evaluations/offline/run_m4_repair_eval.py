@@ -140,14 +140,39 @@ def verify_pdf(source: dict, pdf: Path) -> dict:
             "page_count": len(canonical.pages)}
 
 
-def _configure_env(pdf: Path) -> str:
+def _load_env_file(path: Path | None) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if path is None or not Path(path).is_file():
+        return values
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _configure_env(pdf: Path, *, with_llm: bool,
+                   env_file: Path | None) -> str:
     token = secrets.token_hex(32)
     os.environ["FRP_LOCAL_FACTS_REPORT"] = "1"
     os.environ["FRP_LOCAL_LLM_ACCESS_TOKEN"] = token
     os.environ["FRP_LOCAL_SOURCE_PDF_600760"] = str(pdf)
-    os.environ.pop("FRP_LOCAL_CLARIFY_LLM", None)
-    os.environ.pop("DEEPSEEK_API_KEY", None)
     os.environ.pop("FRP_ENV", None)
+    if with_llm:
+        key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if not key:
+            key = _load_env_file(env_file).get("DEEPSEEK_API_KEY", "").strip()
+        if not key:
+            raise ValueError("MODEL_NOT_CONFIGURED")
+        os.environ["DEEPSEEK_API_KEY"] = key
+        os.environ["FRP_LOCAL_CLARIFY_LLM"] = "1"
+        os.environ["FRP_LOCAL_PLAN_LLM_LIMIT"] = "8"
+    else:
+        os.environ.pop("FRP_LOCAL_CLARIFY_LLM", None)
+        os.environ.pop("DEEPSEEK_API_KEY", None)
+        os.environ.pop("FRP_LOCAL_PLAN_LLM_LIMIT", None)
     return token
 
 
@@ -170,6 +195,7 @@ def _coverage(payload: dict) -> dict | None:
         "complete": coverage.get("complete"),
         "total": coverage.get("total"),
         "satisfied": coverage.get("satisfied"),
+        "plan_source": coverage.get("plan_source"),
         "requirements": [
             {"facet": item.get("facet"), "status": item.get("status"),
              "reason": item.get("reason")}
@@ -193,7 +219,7 @@ def capture(args: argparse.Namespace) -> int:
     pdf = Path(args.pdf)
     verified = verify_pdf(body["source"], pdf)
     run_dir = check_run_dir(Path(args.run_dir))
-    token = _configure_env(pdf)
+    token = _configure_env(pdf, with_llm=args.with_llm, env_file=args.env_file)
 
     sys.path.insert(0, str(API))
     from fastapi.testclient import TestClient
@@ -264,6 +290,7 @@ def capture(args: argparse.Namespace) -> int:
         "verified_source": verified,
         "repo": repo_state(),
         "captured_at": datetime.now().astimezone().isoformat(),
+        "llm_enabled": bool(args.with_llm),
         "cases": records,
     }
     target = run_dir / "capture.json"
@@ -303,6 +330,7 @@ def score(args: argparse.Namespace) -> int:
     repair_cases = repair_offered = target_present = top1_hit = confirmed = 0
     no_candidate_correct = complete_control = false_repair = 0
     unsafe = 0
+    llm_planned = 0
     latency = []
 
     for case in body["cases"]:
@@ -321,6 +349,8 @@ def score(args: argparse.Namespace) -> int:
         latency.append(record.get("latency_ms") or 0)
         coverage = record.get("coverage") or {}
         repair = coverage.get("repair")
+        if coverage.get("plan_source") == "LLM_PROPOSAL_VALIDATED":
+            llm_planned += 1
 
         if outcome == "REPAIR":
             repair_cases += 1
@@ -417,6 +447,7 @@ def score(args: argparse.Namespace) -> int:
         "correct_partial_no_candidate": no_candidate_correct,
         "correct_complete_control": complete_control,
         "unexpected_repair_offers": false_repair,
+        "llm_planned_cases": llm_planned,
         "unsafe_publications": unsafe,
         "latency_ms_avg": round(sum(latency) / len(latency)) if latency else None,
         "latency_ms_max": max(latency) if latency else None,
@@ -479,6 +510,9 @@ def main(argv: list[str] | None = None) -> int:
     cap.add_argument("--questions", type=Path, default=QUESTIONS_DEFAULT)
     cap.add_argument("--pdf", type=Path, required=True)
     cap.add_argument("--run-dir", type=Path, required=True)
+    cap.add_argument("--with-llm", action="store_true",
+                     help="enable the opt-in DeepSeek facet proposal")
+    cap.add_argument("--env-file", type=Path, default=None)
     cap.set_defaults(func=capture)
 
     sc = sub.add_parser("score", help="score a captured trace")
