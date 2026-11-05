@@ -312,3 +312,25 @@ def test_llm_facets_drive_the_multi_plan(monkeypatch):
     assert result["coverage"]["plan_source"] == "LLM_PROPOSAL_VALIDATED"
     assert result["coverage"]["satisfied"] == 2
     assert "5,535,215,299.31" in {fact["value_verbatim"] for fact in result["facts"]}
+
+
+def test_llm_planning_can_split_a_question_the_conjunction_split_misses(monkeypatch):
+    monkeypatch.setattr(
+        rb.interpretation, "propose_facets",
+        lambda question, api_key: {
+            "status": "FACETS_READY", "facets": ["营业收入", "净利润"],
+            "rationale": "两个问句。", "model": "deepseek-flash",
+        },
+    )
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？净利润又是多少？",
+        as_of=AS_OF, api_key="key",
+    )
+
+    assert result is not None
+    assert result["coverage"]["plan_source"] == "LLM_PROPOSAL_VALIDATED"
+    assert result["coverage"]["complete"] is True
+    assert {"6,191,107,217.36", "468,144,459.10"} == {
+        fact["value_verbatim"] for fact in result["facts"]
+    }

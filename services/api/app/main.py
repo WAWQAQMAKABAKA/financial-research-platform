@@ -723,19 +723,19 @@ def local_facts_report_ask(
         os.environ.get("FRP_LOCAL_LLM_ACCESS_TOKEN", "").encode("utf-8")
     ).hexdigest()
     try:
-        if len(evidence_plan.split_facets(request.question)) >= 2:
-            plan_api_key = None
-            if os.environ.get("FRP_LOCAL_CLARIFY_LLM") == "1":
-                key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
-                if key and _M4_PLAN_LLM_LOCK.acquire(blocking=False):
-                    try:
-                        limit = int(os.environ.get("FRP_LOCAL_PLAN_LLM_LIMIT", "4"))
-                        global _M4_PLAN_LLM_COUNT
-                        if _M4_PLAN_LLM_COUNT < limit:
-                            _M4_PLAN_LLM_COUNT += 1
-                            plan_api_key = key
-                    finally:
-                        _M4_PLAN_LLM_LOCK.release()
+        plan_api_key = None
+        if os.environ.get("FRP_LOCAL_CLARIFY_LLM") == "1":
+            key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+            if key and _M4_PLAN_LLM_LOCK.acquire(blocking=False):
+                try:
+                    limit = int(os.environ.get("FRP_LOCAL_PLAN_LLM_LIMIT", "4"))
+                    global _M4_PLAN_LLM_COUNT
+                    if _M4_PLAN_LLM_COUNT < limit:
+                        _M4_PLAN_LLM_COUNT += 1
+                        plan_api_key = key
+                finally:
+                    _M4_PLAN_LLM_LOCK.release()
+        if len(evidence_plan.split_facets(request.question)) >= 2 or plan_api_key:
             result = report_builder.build_multi_report(
                 report_key, Path(pdf_path), request.question, as_of=as_of,
                 repair_secret=repair_secret, api_key=plan_api_key,

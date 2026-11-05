@@ -696,9 +696,7 @@ def build_multi_report(
         )
 
     proposed_facets = None
-    if api_key and evidence_plan.split_facets(question) and len(
-        evidence_plan.split_facets(question)
-    ) >= 2:
+    if api_key:
         proposal = interpretation.propose_facets(question, api_key=api_key)
         if proposal.get("status") == "FACETS_READY":
             proposed_facets = proposal["facets"]
