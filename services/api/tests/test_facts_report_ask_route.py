@@ -307,3 +307,23 @@ def test_management_question_returns_a_preview_not_a_publication(monkeypatch):
     assert report["reason"] == "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW"
     assert report["facts"] == []
     assert report["management_preview"]["pointers"]
+
+
+def test_mixed_question_route_returns_fact_and_preview(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+
+    response = TestClient(app).post(
+        ASK_URL,
+        json={"question": "600760 中航沈飞 2026 年半年度营业收入是多少？管理层为什么说利润下降？"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "REPORT_READY"
+    assert report["report_type"] == "FACTS_WITH_MANAGEMENT_PREVIEW_REPORT"
+    assert report["facts"]
+    assert report["management_preview"]["pointers"]
+    assert report["management_publication"]["may_publish"] is False

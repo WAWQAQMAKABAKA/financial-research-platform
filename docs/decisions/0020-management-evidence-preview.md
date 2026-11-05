@@ -43,6 +43,24 @@ comparison, then ambiguity.
 If the section exists but no line matches, the report is withheld with
 `NO_MANAGEMENT_EVIDENCE`; it never falls back to unrelated pages.
 
+## Mixed question (v1.1)
+
+A question can contain both kinds of sentence, e.g.
+"营业收入是多少？管理层为什么说利润下降？". The builder splits on `？?。；;` and
+newlines, classifies each sentence, and:
+
+- publishes the fact sentence through the normal multi/single path (facts,
+  literal review, `FACTS_ONLY` policy);
+- attaches the management sentence as a withheld preview
+  (`PREVIEW_ONLY_NOT_PUBLISHED`, `semantic_review = NOT_PERFORMED`);
+- returns `FACTS_WITH_MANAGEMENT_PREVIEW_REPORT` with
+  `management_publication.may_publish = false`;
+- returns `None` when either part is missing or the fact part cannot publish, so
+  the management-only preview path is used instead.
+
+The published decision covers only the fact claims; the preview never enters the
+policy's claims.
+
 ## Why not publish
 
 The publication policy admits only `OBSERVED_FACT` claims under `FACTS_ONLY`.

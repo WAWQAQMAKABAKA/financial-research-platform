@@ -129,6 +129,8 @@ type Report = {
   };
   request: { question: string; question_code: string | null };
   coverage?: Coverage;
+  management_preview?: ManagementPreview | null;
+  management_publication?: { may_publish: boolean; reason: string } | null;
   retrieval?: Retrieval;
   selection?: Selection;
   facts: Fact[];
@@ -556,6 +558,23 @@ async function ReportBody({ searchParams }: {
       <div className={styles.grid}>
         <div>
           {report.facts.map((fact) => <FactCard key={fact.claim_id} fact={fact} />)}
+
+          {report.management_preview?.pointers?.length ? (
+            <section className={styles.reviewCard} aria-label="管理层原文预览">
+              <p className={styles.kicker}>管理层原文预览 / NOT PUBLISHED</p>
+              <p className={styles.muted}>
+                原文摘录 · 未发布 · 语义审阅未执行
+              </p>
+              <ul className={styles.withheldList}>
+                {report.management_preview.pointers.map((pointer) => (
+                  <li key={`${pointer.page_number}-${pointer.excerpt.slice(0, 24)}`}>
+                    <strong>第 {pointer.page_number} 页</strong>
+                    <span>{pointer.excerpt}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {report.coverage && (
             <section className={styles.reviewCard} aria-label="证据覆盖">

@@ -408,3 +408,32 @@ def test_management_preview_stays_inside_the_discussion_section():
         and ("下滑" in pointer["excerpt"] or "下降" in pointer["excerpt"])
         for pointer in pointers
     )
+
+
+def test_mixed_question_publishes_the_fact_and_previews_the_explanation():
+    result = rb.build_mixed_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度营业收入是多少？管理层为什么说利润下降？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert result["report_type"] == "FACTS_WITH_MANAGEMENT_PREVIEW_REPORT"
+    assert {fact["value_verbatim"] for fact in result["facts"]} == {"6,191,107,217.36"}
+    preview = result["management_preview"]
+    assert preview["status"] == "PREVIEW_ONLY_NOT_PUBLISHED"
+    assert preview["semantic_review"] == "NOT_PERFORMED"
+    assert preview["pointers"]
+    assert result["management_publication"] == {
+        "may_publish": False,
+        "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
+        "semantic_review": "NOT_PERFORMED",
+    }
+
+
+def test_mixed_question_without_a_publishable_fact_returns_none():
+    assert rb.build_mixed_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度员工人数是多少？管理层为什么说利润下降？",
+        as_of=AS_OF,
+    ) is None

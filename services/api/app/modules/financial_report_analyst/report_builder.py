@@ -1058,58 +1058,7 @@ def _question_grams(question: str) -> set[str]:
     }
 
 
-def build_management_report(
-    report_key: str,
-    pdf_path: Path,
-    question: str,
-    *,
-    as_of: datetime,
-) -> dict:
-    """Management questions get an evidence preview that is never published.
-
-    The excerpt is taken from a canonical text span bound to the manifest. It is
-    a literal source preview only; management claims still require a semantic
-    review that this platform does not perform.
-    """
-    entry = source_workspace.REPORTS.get(report_key)
-    if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
-        raise source_workspace.UnknownReportError("REPORT_NOT_AUTHORIZED_IN_CORPUS")
-
-    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
-    if document.to_source_document() != entry.source:
-        raise ValueError("MANIFEST_SOURCE_IDENTITY_MISMATCH")
-
-    if (not isinstance(question, str) or not question.strip()
-            or len(question) > MAX_QUESTION_CHARS):
-        return _withheld(
-            report_key, "QUESTION_INVALID", document=document,
-            extra={"request": {"question": question, "question_code": None}},
-        )
-
-    path = Path(pdf_path)
-    corpus_manifest.verify_document(document, pdf_path=path)
-
-    intent = intent_gate.classify_intent(question)
-    intent_block = {"value": intent.value, "version": intent_gate.INTENT_VERSION,
-                    "rejection_reason": intent_gate.rejection_reason(intent)}
-    if intent is not intent_gate.Intent.MANAGEMENT_EXPLANATION:
-        return _withheld(
-            report_key, "QUESTION_INTENT_AMBIGUOUS", document=document,
-            extra={"request": {"question": question, "question_code": None},
-                   "intent": intent_block},
-        )
-
-    try:
-        retrieval = canonical_retrieval.retrieve_report_evidence(
-            entry.source, path, question, as_of=as_of,
-        )
-    except ValueError as exc:
-        return _withheld(
-            report_key, str(exc) or "RETRIEVAL_FAILED", document=document,
-            extra={"request": {"question": question, "question_code": None},
-                   "intent": intent_block},
-        )
-
+def _management_preview_pointers(path: Path, question: str) -> list[dict]:
     grams = _question_grams(question)
     section_pages = _management_section_pages(path)
     explanation_cues = ("下降", "减少", "变动", "原因", "主要系", "由于",
@@ -1175,6 +1124,62 @@ def build_management_report(
         if len(pointers) == 3:
             break
 
+    return pointers
+
+
+def build_management_report(
+    report_key: str,
+    pdf_path: Path,
+    question: str,
+    *,
+    as_of: datetime,
+) -> dict:
+    """Management questions get an evidence preview that is never published.
+
+    The excerpt is taken from a canonical text span bound to the manifest. It is
+    a literal source preview only; management claims still require a semantic
+    review that this platform does not perform.
+    """
+    entry = source_workspace.REPORTS.get(report_key)
+    if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
+        raise source_workspace.UnknownReportError("REPORT_NOT_AUTHORIZED_IN_CORPUS")
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    if document.to_source_document() != entry.source:
+        raise ValueError("MANIFEST_SOURCE_IDENTITY_MISMATCH")
+
+    if (not isinstance(question, str) or not question.strip()
+            or len(question) > MAX_QUESTION_CHARS):
+        return _withheld(
+            report_key, "QUESTION_INVALID", document=document,
+            extra={"request": {"question": question, "question_code": None}},
+        )
+
+    path = Path(pdf_path)
+    corpus_manifest.verify_document(document, pdf_path=path)
+
+    intent = intent_gate.classify_intent(question)
+    intent_block = {"value": intent.value, "version": intent_gate.INTENT_VERSION,
+                    "rejection_reason": intent_gate.rejection_reason(intent)}
+    if intent is not intent_gate.Intent.MANAGEMENT_EXPLANATION:
+        return _withheld(
+            report_key, "QUESTION_INTENT_AMBIGUOUS", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    try:
+        retrieval = canonical_retrieval.retrieve_report_evidence(
+            entry.source, path, question, as_of=as_of,
+        )
+    except ValueError as exc:
+        return _withheld(
+            report_key, str(exc) or "RETRIEVAL_FAILED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    pointers = _management_preview_pointers(path, question)
     if not pointers:
         return _withheld(
             report_key, "NO_MANAGEMENT_EVIDENCE", document=document,
@@ -1232,3 +1237,84 @@ def build_management_report(
         "limitations": limitations,
         "report_storage": "NOT_PERSISTED",
     }
+
+
+MIXED_VERSION = "m5-facts-with-management-preview-v1"
+_SENTENCE_SPLIT = re.compile(r"[？?。；;\n]+")
+
+
+def build_mixed_report(
+    report_key: str,
+    pdf_path: Path,
+    question: str,
+    *,
+    as_of: datetime,
+) -> dict | None:
+    """One question with a fact sentence and a management sentence.
+
+    The fact part publishes through the normal path; the management part is
+    attached as a withheld preview. Returns None when either part is absent or
+    the fact part cannot publish, so the caller keeps the management-only path.
+    """
+    entry = source_workspace.REPORTS.get(report_key)
+    if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
+        raise source_workspace.UnknownReportError("REPORT_NOT_AUTHORIZED_IN_CORPUS")
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    if document.to_source_document() != entry.source:
+        raise ValueError("MANIFEST_SOURCE_IDENTITY_MISMATCH")
+
+    if (not isinstance(question, str) or not question.strip()
+            or len(question) > MAX_QUESTION_CHARS):
+        return None
+
+    fact_parts = []
+    management_parts = []
+    for part in _SENTENCE_SPLIT.split(question):
+        part = part.strip()
+        if len(part) < 2:
+            continue
+        sentence_intent = intent_gate.classify_intent(part)
+        if sentence_intent is intent_gate.Intent.MANAGEMENT_EXPLANATION:
+            management_parts.append(part)
+        elif sentence_intent is intent_gate.Intent.FACT_LOOKUP:
+            fact_parts.append(part)
+    if not fact_parts or not management_parts:
+        return None
+
+    path = Path(pdf_path)
+    fact_text = "，".join(fact_parts)
+    try:
+        fact_report = build_multi_report(report_key, path, fact_text, as_of=as_of)
+        if fact_report is None:
+            fact_report = build_report_from_question(report_key, path, fact_text, as_of=as_of)
+    except (ValueError, source_workspace.UnknownReportError):
+        return None
+    if fact_report.get("status") != "REPORT_READY" or not fact_report.get("facts"):
+        return None
+
+    management_text = "，".join(management_parts)
+    pointers = _management_preview_pointers(path, management_text)
+    composed = dict(fact_report)
+    composed["report_type"] = "FACTS_WITH_MANAGEMENT_PREVIEW_REPORT"
+    composed["report_version"] = MIXED_VERSION
+    composed["report_id"] = sha256(
+        f"{document.document_id}|{document.canonical_sha256}|"
+        f"{MIXED_VERSION}|{sha256(question.encode('utf-8')).hexdigest()}".encode()
+    ).hexdigest()
+    composed["management_preview"] = {
+        "status": "PREVIEW_ONLY_NOT_PUBLISHED" if pointers else "NO_MANAGEMENT_EVIDENCE",
+        "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
+        "semantic_review": "NOT_PERFORMED",
+        "pointers": pointers,
+    }
+    composed["management_publication"] = {
+        "may_publish": False,
+        "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
+        "semantic_review": "NOT_PERFORMED",
+    }
+    composed["limitations"] = list(composed.get("limitations") or []) + [
+        "管理层解释部分只作原文预览，未发布；语义审阅未执行。",
+        "已发布的事实只覆盖事实子句，不覆盖解释子句。",
+    ]
+    return composed
