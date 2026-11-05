@@ -1,0 +1,130 @@
+{
+  "schema_version": "frp-m4-wording-dev-v1",
+  "corpus_type": "AUTHOR_CURATED_DEVELOPMENT_NOT_INDEPENDENT_HOLDOUT",
+  "scope": "600760_2026H1_WORDING",
+  "as_of": "2026-11-03T00:00:00+08:00",
+  "question_count": 4,
+  "source": {
+    "ticker": "600760",
+    "issuer": "中航沈飞",
+    "report_key": "600760-2026H1",
+    "document_id": "600760-2026H1-cninfo-1225517994",
+    "report_period": "2026H1",
+    "published_on": "2026-08-28",
+    "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-28/1225517994.PDF",
+    "source_sha256": "d53ee98c091fdcbb8df3ebcc3f8d9bef87f61b374615dc3165dadb594f637d99",
+    "canonical_sha256": "620d3a30f73423527dd662e21ebf3367b546dfa6795c6fcf618f35ebf0008aa5",
+    "pdf_pages": 207
+  },
+  "cases": [
+    {
+      "case_id": "W-01",
+      "family": "two_questions",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？净利润又是多少？",
+      "expected": {
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "value": "6,191,107,217.36",
+            "page": 46
+          },
+          {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "value": "468,144,459.10",
+            "page": 47
+          }
+        ]
+      },
+      "note": "No conjunction between the two questions."
+    },
+    {
+      "case_id": "W-02",
+      "family": "three_questions",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？净利润是多少？营业成本是多少？",
+      "expected": {
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "value": "6,191,107,217.36",
+            "page": 46
+          },
+          {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "value": "468,144,459.10",
+            "page": 47
+          },
+          {
+            "row_label": "其中：营业成本",
+            "value": "5,535,215,299.31",
+            "page": 46
+          }
+        ]
+      },
+      "note": "Three separate question sentences."
+    },
+    {
+      "case_id": "W-03",
+      "family": "mixed_wording",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入是多少？净利润和营业成本呢？",
+      "expected": {
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "value": "6,191,107,217.36",
+            "page": 46
+          },
+          {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "value": "468,144,459.10",
+            "page": 47
+          },
+          {
+            "row_label": "其中：营业成本",
+            "value": "5,535,215,299.31",
+            "page": 46
+          }
+        ]
+      },
+      "note": "One standalone question plus a conjoined pair."
+    },
+    {
+      "case_id": "W-04",
+      "family": "four_metrics",
+      "question": "600760 中航沈飞 2026 年半年度合并利润表中营业收入、净利润、营业成本、研发费用分别是多少？",
+      "expected": {
+        "cells": [
+          {
+            "row_label": "其中：营业收入",
+            "value": "6,191,107,217.36",
+            "page": 46
+          },
+          {
+            "row_label": "五、净利润（净亏损以“-”号填列）",
+            "value": "468,144,459.10",
+            "page": 47
+          },
+          {
+            "row_label": "其中：营业成本",
+            "value": "5,535,215,299.31",
+            "page": 46
+          },
+          {
+            "row_label": "研发费用",
+            "value": "59,650,843.12",
+            "page": 47
+          }
+        ]
+      },
+      "note": "Four metrics; the plan cap is three, so under-decomposition is possible."
+    }
+  ],
+  "financial_answer_ground_truth": "CELL_EXPECTATIONS_DEV_ONLY",
+  "evidence_page_annotations": "CELL_LEVEL_DEV_ONLY",
+  "answerability_labels": "NONE",
+  "research_publication": "BLOCKED",
+  "notes": [
+    "Author-curated development set; not an independent holdout.",
+    "Measures whether LLM planning recovers questions the conjunction split misses.",
+    "Under-decomposition is counted when coverage is complete but expected cells are missing."
+  ]
+}
