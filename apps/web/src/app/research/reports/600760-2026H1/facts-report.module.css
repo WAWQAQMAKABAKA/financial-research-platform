@@ -93,3 +93,5 @@
 .repairBlock{margin-top:14px;border-top:1px solid #eef3f4;padding-top:12px}
 
 .managementPreview{margin-top:14px;border-top:1px solid #eef3f4;padding-top:12px}
+
+.reviewContext{max-height:320px;overflow:auto;white-space:pre-wrap;font-size:12px;line-height:1.6;background:#f7fafb;border:1px solid #eef3f4;border-radius:8px;padding:10px}

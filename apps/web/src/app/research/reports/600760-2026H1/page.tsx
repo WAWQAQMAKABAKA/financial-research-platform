@@ -167,6 +167,7 @@ type ReviewPacket = {
   claim_type: string;
   claim_text: string;
   evidence: { page_number: number; excerpt: string; excerpt_sha256: string };
+  context?: string | null;
   checklist: { key: string; label: string }[];
   allowed_reviewers: string[];
   status: string;
@@ -402,6 +403,9 @@ function ReviewPacketCard({ packet }: { packet: ReviewPacket }) {
         {packet.claim_text}
       </p>
       <p className={styles.muted}>证据：第 {packet.evidence.page_number} 页</p>
+      {packet.context && (
+        <pre className={styles.reviewContext}>{packet.context}</pre>
+      )}
       <ul className={styles.withheldList}>
         {packet.checklist.map((item) => (
           <li key={item.key}>

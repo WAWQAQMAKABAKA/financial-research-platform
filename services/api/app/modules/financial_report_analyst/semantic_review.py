@@ -99,6 +99,7 @@ def build_packet(
     page_number: int,
     excerpt: str,
     document: dict,
+    context: str | None = None,
 ) -> dict:
     if not isinstance(claim_text, str) or not claim_text.strip():
         raise ValueError("REVIEW_CLAIM_INVALID")
@@ -114,6 +115,11 @@ def build_packet(
         "page_number": int(page_number),
         "excerpt_sha256": sha256(excerpt.encode("utf-8")).hexdigest(),
         "excerpt": excerpt,
+        "context": (context or "").strip(),
+        "context_sha256": (
+            sha256((context or "").strip().encode("utf-8")).hexdigest()
+            if (context or "").strip() else None
+        ),
         "document_id": document["document_id"],
         "source_sha256": document["source_sha256"],
         "canonical_sha256": document["canonical_sha256"],
@@ -134,6 +140,8 @@ def build_packet(
             "excerpt_sha256": payload["excerpt_sha256"],
             "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
         },
+        "context": payload["context"],
+        "context_sha256": payload["context_sha256"],
         "checklist": [
             {"key": key, "label": CHECKLIST_LABELS[key]}
             for key in CHECKLIST_KEYS
@@ -198,6 +206,9 @@ def record_review(
         "claim_text": payload.get("claim_text"),
         "page_number": payload.get("page_number"),
         "excerpt_sha256": payload.get("excerpt_sha256"),
+        "excerpt": payload.get("excerpt"),
+        "context": payload.get("context"),
+        "context_sha256": payload.get("context_sha256"),
         "document_id": payload.get("document_id"),
         "source_sha256": payload.get("source_sha256"),
         "canonical_sha256": payload.get("canonical_sha256"),

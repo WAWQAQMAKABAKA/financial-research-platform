@@ -1077,7 +1077,7 @@ def _management_preview_pointers(path: Path, question: str) -> list[dict]:
                 next_line = lines[index + 1] if index + 1 < len(lines) else None
                 noisy_next = next_line is None or (
                     next_line.startswith(("√", "□", "-", "－"))
-                    or sum("\u4e00" <= ch <= "\u9fff" for ch in next_line) < 6
+                    or sum("\u4e00" <= ch <= "\u9fff" for ch in next_line) < 2
                 )
                 if line.endswith(("。", "；", "：", "！", "？")) or noisy_next:
                     spans = (1,)
@@ -1185,10 +1185,13 @@ def build_management_report(
     packet = None
     if review_secret and pointers:
         top = pointers[0]
+        with pymupdf.open(path) as pdf:
+            context_text = pdf[top["page_number"] - 1].get_text("text").strip()
         packet = semantic_review.build_packet(
             secret=review_secret, question=question, report_key=report_key,
             claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
             page_number=top["page_number"], excerpt=top["excerpt"],
+            context=context_text,
             document={
                 "document_id": document.document_id,
                 "source_sha256": document.source_sha256,
@@ -1336,10 +1339,13 @@ def build_mixed_report(
     composed["review_packet"] = None
     if review_secret and pointers:
         top = pointers[0]
+        with pymupdf.open(path) as pdf:
+            context_text = pdf[top["page_number"] - 1].get_text("text").strip()
         composed["review_packet"] = semantic_review.build_packet(
             secret=review_secret, question=question, report_key=report_key,
             claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
             page_number=top["page_number"], excerpt=top["excerpt"],
+            context=context_text,
             document={
                 "document_id": document.document_id,
                 "source_sha256": document.source_sha256,

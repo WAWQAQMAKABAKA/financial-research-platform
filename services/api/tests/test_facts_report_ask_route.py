@@ -365,6 +365,9 @@ def test_management_question_pauses_at_the_review_packet(monkeypatch, tmp_path):
     assert packet["development_only"] is True
     assert packet["independent_validation"] is False
     assert packet["evidence"]["page_number"] >= 1
+    assert packet["context"]
+    assert "营业收入变动原因说明" in packet["context"]
+    assert "阶段性偏差" in packet["claim_text"]
     assert not (tmp_path / "reviews").exists()
 
 
@@ -380,6 +383,7 @@ def test_explicit_admit_records_a_development_only_review(monkeypatch, tmp_path)
     assert report["independent_validation"] is False
     assert report["claim"]["text"] == packet["claim_text"]
     assert report["review"]["reviewer_id"] == "local-reviewer"
+    assert "营业收入变动原因说明" in report["review"]["context"]
     assert report["review"]["verdict"] == "ADMIT"
 
 

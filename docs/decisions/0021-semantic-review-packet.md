@@ -15,15 +15,23 @@ pipeline, show the evidence to a named reviewer, and record an explicit verdict.
 `semantic_review` adds a review packet and an immutable review record.
 
 **Packet.** For a management-explanation claim the first preview excerpt becomes
-the claim text (verbatim source). The packet contains question, report key,
-claim type, claim text, page number, excerpt, excerpt SHA-256, document identity,
-a fixed six-item checklist (metric identity, period, entity, basis, evidence
+the claim text (verbatim source, continuation lines joined so the claim is a
+complete sentence). The packet contains question, report key, claim type, claim
+text, page number, excerpt, excerpt SHA-256, the complete page text as `context`,
+`context_sha256`, document identity, a fixed six-item checklist (metric identity, period, entity, basis, evidence
 support, no overreach), the allowlisted reviewers, a 900-second expiry and a
 development-only marker. The packet is HMAC-signed with the local secret.
 
 **Pause.** `POST /ask` never decides. It returns the packet with
 `status = AWAITING_EXPLICIT_HUMAN_DECISION` and keeps the report withheld. No
 review record and no published management claim are produced by asking.
+
+**Binding.** The review record stores the claim text, excerpt, excerpt hash,
+context, context hash, page and document identity. The decision compares the
+claim text and excerpt hash; the context hash is part of the signed packet. If a
+regenerated packet changes the claim, excerpt or context, it must be presented
+for review again. If only the packet token is refreshed with identical content,
+the new fingerprint is shown before the decision.
 
 **Decision.** `POST /api/v1/research/reviews/decide` accepts `packet_id`,
 `reviewer_id`, `verdict` (ADMIT/REJECT/UNCERTAIN), the full checklist and a
