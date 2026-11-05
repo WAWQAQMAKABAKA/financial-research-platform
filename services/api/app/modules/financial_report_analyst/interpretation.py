@@ -230,7 +230,7 @@ def propose_facets(question: str, *, api_key: str,
 
     facets = [facet.strip() for facet in candidate.facets
               if isinstance(facet, str) and 2 <= len(facet.strip()) <= 120]
-    if (not 2 <= len(facets) <= 3
+    if (not 2 <= len(facets) <= 12
             or len({facet for facet in facets}) != len(facets)):
         return {"status": "WITHHELD", "reason": "MODEL_FACETS_INVALID",
                 "facets": [], "rationale": None}

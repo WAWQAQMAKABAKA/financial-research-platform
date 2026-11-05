@@ -148,6 +148,7 @@ type Report = {
 type WithheldReport = {
   status: "REPORT_WITHHELD";
   reason: string;
+  plan?: { status: string; detected: number; max: number } | null;
   request?: { question: string; question_code: string | null } | null;
   retrieval?: Retrieval;
   selection?: Selection;
@@ -196,6 +197,7 @@ const REASONS: Record<string, string> = {
   COMPARISON_NOT_PUBLISHABLE: "比较类问题不在本报告的发布范围内，本报告只发布披露事实。",
   FORWARD_VIEW_NOT_PUBLISHABLE: "前瞻或预测类问题不在本报告的发布范围内。",
   QUESTION_INTENT_AMBIGUOUS: "无法确定这是一个披露事实查询，因此不发布。",
+  TOO_MANY_REQUIREMENTS: "问题包含的指标数量超过当前上限，请拆成多个问题。",
 };
 
 function reasonText(reason: string): string {
@@ -486,6 +488,11 @@ async function ReportBody({ searchParams }: {
           <div>
             <h2>该问题未取得可发布的披露事实</h2>
             <p>{reasonText(withheld.reason)}</p>
+            {withheld.plan?.status === "TOO_MANY_REQUIREMENTS" && (
+              <p className={styles.muted}>
+                识别到 {withheld.plan.detected} 个指标，当前最多支持 {withheld.plan.max} 个。
+              </p>
+            )}
             <p className={styles.muted}>
               未展示任何金额。研究发布：已阻止 · 财务语义核验：未进行。
             </p>

@@ -32,6 +32,8 @@ def index():
             HEADER,
             ["一、营业总收入", "61", "6,191,107,217.36", "14,628,337,068.60"],
             ["其中：营业收入", "61", "6,191,107,217.36", "14,628,337,068.60"],
+            ["其中：营业成本", "61", "5,535,215,299.31", "12,835,954,116.83"],
+            ["研发费用", "65", "59,650,843.12", "182,439,746.46"],
             ["五、净利润（净亏损以“-”号填列）", "", "468,144,459.10", "1,131,941,918.95"],
         ]),
         section("parent_income_statement", 2, [
@@ -119,3 +121,21 @@ def test_invalid_proposed_facets_fall_back_to_split():
     )
 
     assert result["facets_source"] == "DETERMINISTIC_SPLIT"
+
+
+def test_four_requirements_are_planned_within_the_dynamic_ceiling():
+    result = plan("合并利润表中营业收入、净利润、营业成本和研发费用分别是多少？")
+
+    assert result["status"] == "PLAN_READY"
+    assert len(result["requirements"]) == 4
+    assert all(item["status"] == "SATISFIED" for item in result["requirements"])
+
+
+def test_more_than_six_requirements_are_rejected_with_the_count():
+    result = plan(
+        "合并利润表中营业收入、净利润、营业成本、研发费用、税金及附加、销售费用和管理费用分别是多少？"
+    )
+
+    assert result["status"] == "TOO_MANY_REQUIREMENTS"
+    assert result["detected"] == 7
+    assert result["max"] == 6

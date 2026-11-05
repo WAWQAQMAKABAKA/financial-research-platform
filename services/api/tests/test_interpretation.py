@@ -141,3 +141,17 @@ def test_propose_facets_rejects_a_single_facet(monkeypatch):
 def test_propose_facets_needs_a_key():
     result = interp.propose_facets("营业收入和净利润分别是多少？", api_key="")
     assert result["reason"] == "MODEL_NOT_CONFIGURED"
+
+
+def test_propose_facets_accepts_four(monkeypatch):
+    monkeypatch.setattr(
+        deepseek_draft, "_send",
+        lambda body, api_key, client: facet_response({
+            "facets": ["营业收入", "净利润", "营业成本", "研发费用"],
+            "rationale": "四个指标。",
+        }),
+    )
+    result = interp.propose_facets("四个指标分别是多少？", api_key="key")
+
+    assert result["status"] == "FACETS_READY"
+    assert len(result["facets"]) == 4

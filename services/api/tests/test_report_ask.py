@@ -334,3 +334,30 @@ def test_llm_planning_can_split_a_question_the_conjunction_split_misses(monkeypa
     assert {"6,191,107,217.36", "468,144,459.10"} == {
         fact["value_verbatim"] for fact in result["facts"]
     }
+
+
+def test_four_metric_question_publishes_four_facts():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入、净利润、营业成本、研发费用分别是多少？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_READY"
+    assert result["coverage"]["total"] == 4
+    assert result["coverage"]["complete"] is True
+    assert len(result["facts"]) == 4
+
+
+def test_seven_metric_question_is_rejected_with_the_count():
+    result = rb.build_multi_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度合并利润表中营业收入、净利润、营业成本、研发费用、"
+        "税金及附加、销售费用、管理费用分别是多少？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "TOO_MANY_REQUIREMENTS"
+    assert result["plan"] == {"status": "TOO_MANY_REQUIREMENTS", "detected": 7, "max": 6}
+    assert result["facts"] == []

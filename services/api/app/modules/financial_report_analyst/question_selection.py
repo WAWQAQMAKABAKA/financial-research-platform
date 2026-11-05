@@ -22,7 +22,7 @@ from app.evidence.cell_attribution import _index_table
 from app.evidence.document_index import SECTION_TITLES
 
 SELECTION_VERSION = "m2a-question-to-cell-v1"
-MAX_FACTS = 3
+MAX_FACTS = 6
 
 INCOME_STATEMENT_KINDS = (
     "consolidated_income_statement",

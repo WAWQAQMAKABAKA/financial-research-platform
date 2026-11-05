@@ -17,10 +17,12 @@ import unicodedata
 from app.modules.financial_report_analyst import question_selection as qs
 
 VERSION = "m4-evidence-requirements-v1"
-MAX_REQUIREMENTS = 3
+MAX_REQUIREMENTS = 6
 
+# "及" alone is deliberately absent: it occurs inside row labels such as
+# 税金及附加 and would split a single metric into two. "以及" still splits.
 _SPLIT = re.compile(
-    r"(?:以及|并且|和|与|及|、|，|,|；|;|\band\b)", re.IGNORECASE
+    r"(?:以及|并且|和|与|、|，|,|；|;|\band\b)", re.IGNORECASE
 )
 _TAIL = re.compile(
     r"(?:分别是多少|分别多少|各是多少|分别是|分别|是多少|有哪些|如何|怎么样|什么情况)"
@@ -39,7 +41,7 @@ def split_facets(question: str) -> list[str]:
     trimmed = _TAIL.sub("", question.strip()).rstrip("？?。. ")
     parts = [part.strip(" ?？。") for part in _SPLIT.split(trimmed)]
     distinct = [part for part in dict.fromkeys(parts) if len(_norm(part)) >= 2]
-    if not 2 <= len(distinct) <= MAX_REQUIREMENTS:
+    if len(distinct) < 2:
         return [question.strip()]
     return distinct
 
@@ -57,11 +59,22 @@ def plan_requirements(
     """Return a plan, a scope-ambiguity signal, or None for single-fact questions."""
     facets = split_facets(question)
     facets_source = "DETERMINISTIC_SPLIT"
-    if proposed_facets and 2 <= len(proposed_facets) <= MAX_REQUIREMENTS:
+    if proposed_facets and len(proposed_facets) >= 2:
         facets = list(proposed_facets)
         facets_source = "LLM_PROPOSAL_VALIDATED"
     if len(facets) < 2:
         return None
+    if len(facets) > MAX_REQUIREMENTS:
+        return {
+            "status": "TOO_MANY_REQUIREMENTS",
+            "reason": "TOO_MANY_REQUIREMENTS",
+            "detected": len(facets),
+            "max": MAX_REQUIREMENTS,
+            "facets": facets,
+            "facets_source": facets_source,
+            "present": [],
+            "requirements": [],
+        }
 
     section_pages = qs._section_pages(index)
     present = [kind for kind in qs.INCOME_STATEMENT_KINDS if kind in section_pages]

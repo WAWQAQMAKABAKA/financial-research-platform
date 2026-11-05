@@ -29,12 +29,14 @@ def question_set():
          "expected": {"cells": [REV, PROFIT, COST]}},
         {"case_id": "W-04", "family": "four", "question": "营业收入、净利润、营业成本、研发费用？",
          "expected": {"cells": [REV, PROFIT, COST, RD]}},
+        {"case_id": "W-05", "family": "over_limit", "question": "七个指标？",
+         "expected": {"outcome": "REJECT", "detected": 7, "max": 6}},
     ]
     return {
         "schema_version": ev.QUESTIONS_SCHEMA,
         "corpus_type": "AUTHOR_CURATED_DEVELOPMENT_NOT_INDEPENDENT_HOLDOUT",
         "scope": "600760_2026H1_WORDING", "as_of": AS_OF,
-        "question_count": 4, "source": SOURCE, "cases": cases,
+        "question_count": 5, "source": SOURCE, "cases": cases,
         "research_publication": "BLOCKED",
     }
 
@@ -63,6 +65,10 @@ def full_trace():
             record("W-02", [REV, PROFIT, COST], plan="LLM_PROPOSAL_VALIDATED", complete=True),
             record("W-03", [REV, PROFIT, COST], plan="LLM_PROPOSAL_VALIDATED", complete=True),
             record("W-04", [REV, PROFIT, COST], plan="LLM_PROPOSAL_VALIDATED", complete=True),
+            {"case_id": "W-05", "status": "REPORT_WITHHELD",
+             "reason": "TOO_MANY_REQUIREMENTS", "facts": [], "coverage": None,
+             "plan": {"status": "TOO_MANY_REQUIREMENTS", "detected": 7, "max": 6},
+             "latency_ms": 1000},
         ],
     }
 
@@ -100,6 +106,7 @@ def test_single_report_counts_as_cells_ok(harness):
     assert summary["under_decomposition"] == 1
     assert summary["over_answer"] == 0
     assert summary["llm_planned_cases"] == 3
+    assert summary["over_limit_correct"] == 1
 
 
 def test_under_decomposition_is_flagged(harness):

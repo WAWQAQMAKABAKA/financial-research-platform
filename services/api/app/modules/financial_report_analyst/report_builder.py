@@ -719,11 +719,17 @@ def build_multi_report(
                                  "trace": {"present_statement_kinds": plan["present"]}}},
         )
     if plan["status"] != "PLAN_READY":
+        extra = {"request": {"question": question, "question_code": None},
+                 "intent": intent_block, "retrieval": retrieval_trace}
+        if plan["status"] == "TOO_MANY_REQUIREMENTS":
+            extra["plan"] = {
+                "status": "TOO_MANY_REQUIREMENTS",
+                "detected": plan["detected"],
+                "max": plan["max"],
+            }
         return _withheld(
             report_key, str(plan.get("reason") or "NO_STATEMENT_SCOPE"),
-            document=document,
-            extra={"request": {"question": question, "question_code": None},
-                   "intent": intent_block, "retrieval": retrieval_trace},
+            document=document, extra=extra,
         )
 
     satisfied = [item for item in plan["requirements"] if item["status"] == "SATISFIED"]

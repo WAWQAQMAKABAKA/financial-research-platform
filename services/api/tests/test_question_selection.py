@@ -149,10 +149,14 @@ def test_unknown_column_is_withheld():
 
 
 def test_too_many_matching_rows_are_withheld():
-    rows = [HEADER] + [[f"其中：项目{i}", "", "1.00", "2.00"] for i in range(5)]
+    # MAX_FACTS is 6, so seven matches are required to exceed it.
+    rows = [HEADER] + [[f"其中：项目{i}", "", "1.00", "2.00"] for i in range(7)]
     index = build_index(section("consolidated_income_statement", 1, rows))
 
-    out = select("2026年半年度合并利润表中项目0项目1项目2项目3项目4是多少？", index=index)
+    out = select(
+        "2026年半年度合并利润表中项目0项目1项目2项目3项目4项目5项目6是多少？",
+        index=index,
+    )
 
     assert out["status"] == "SELECTION_WITHHELD"
     assert out["reason"] == "TOO_MANY_ROW_MATCHES"

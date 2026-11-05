@@ -27,13 +27,13 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 API = ROOT / "services/api"
-QUESTIONS_DEFAULT = Path(__file__).with_name("m4_wording_questions_dev_v1.json")
+QUESTIONS_DEFAULT = Path(__file__).with_name("m4_wording_questions_dev_v2.json")
 MANIFEST = ROOT / "data/manifests/corpus.v1.json"
 PRIVATE_ROOT = ROOT / "data/private"
 
 CAPTURE_SCHEMA = "frp-m4-wording-capture-v1"
 SCORE_SCHEMA = "frp-m4-wording-score-v1"
-QUESTIONS_SCHEMA = "frp-m4-wording-dev-v1"
+QUESTIONS_SCHEMA = "frp-m4-wording-dev-v2"
 MAX_QUESTION = 240
 
 
@@ -81,7 +81,7 @@ def load_questions(path: Path, *, with_expectations: bool) -> tuple[dict, str, s
         raise ValueError("QUESTION_AS_OF_NAIVE")
     cases = body.get("cases")
     if (not isinstance(cases, list) or len(cases) != body.get("question_count")
-            or len(cases) != 4):
+            or not 4 <= len(cases) <= 8):
         raise ValueError("QUESTION_COUNT_INVALID")
     if len({case.get("case_id") for case in cases}) != len(cases):
         raise ValueError("DUPLICATE_CASE_ID")
@@ -102,7 +102,10 @@ def load_questions(path: Path, *, with_expectations: bool) -> tuple[dict, str, s
 
     for case in cases:
         expected = case.get("expected") or {}
-        if not expected.get("cells"):
+        if expected.get("outcome") == "REJECT":
+            if not isinstance(expected.get("detected"), int):
+                raise ValueError("EXPECTED_DETECTED_MISSING:" + case["case_id"])
+        elif not expected.get("cells"):
             raise ValueError("EXPECTED_CELLS_MISSING:" + case["case_id"])
         if not isinstance(case.get("question"), str) or not (2 <= len(case["question"]) <= MAX_QUESTION):
             raise ValueError("QUESTION_INVALID:" + case["case_id"])
@@ -216,6 +219,7 @@ def capture(args: argparse.Namespace) -> int:
         record["reason"] = payload.get("reason")
         record["facts"] = _facts(payload)
         record["coverage"] = _coverage(payload)
+        record["plan"] = payload.get("plan")
         record["latency_ms"] = round((time.perf_counter() - started) * 1000)
         records.append(record)
         print(f"{record['case_id']} {record['status']} {record.get('reason') or ''} "
@@ -269,12 +273,29 @@ def score(args: argparse.Namespace) -> int:
     under = over = 0
     complete_cases = no_coverage = 0
     llm_planned = 0
+    over_limit = 0
     latency = []
 
     for case in body["cases"]:
         record = records.get(case["case_id"])
         if record is None:
             raise ValueError("TRACE_CASE_MISSING:" + case["case_id"])
+        if case["expected"].get("outcome") == "REJECT":
+            plan = record.get("plan") or {}
+            if (record.get("status") == "REPORT_WITHHELD"
+                    and record.get("reason") == "TOO_MANY_REQUIREMENTS"
+                    and plan.get("detected") == case["expected"]["detected"]):
+                over_limit += 1
+                verdict = "OVER_LIMIT_REJECTED"
+            else:
+                verdict = "OVER_LIMIT_MISMATCH"
+            results.append({
+                "case_id": case["case_id"], "question": case["question"],
+                "status": record.get("status"), "plan": plan,
+                "latency_ms": record.get("latency_ms"), "verdict": verdict,
+            })
+            latency.append(record.get("latency_ms") or 0)
+            continue
         expected_cells = _expected_cells(case["expected"]["cells"])
         actual_cells = _fact_cells(record.get("facts") or [])
         raw_coverage = record.get("coverage")
@@ -331,6 +352,7 @@ def score(args: argparse.Namespace) -> int:
         "over_answer": over,
         "unsafe_publications": over,
         "llm_planned_cases": llm_planned,
+        "over_limit_correct": over_limit,
         "latency_ms_avg": round(sum(latency) / len(latency)) if latency else None,
         "latency_ms_max": max(latency) if latency else None,
         "dev_set_only": True,
@@ -343,7 +365,7 @@ def score(args: argparse.Namespace) -> int:
     os.chmod(run_dir / "score.json", 0o600)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     for entry in results:
-        print(f"{entry['case_id']} {entry['verdict']} plan={entry['plan_source']}")
+        print(f"{entry['case_id']} {entry['verdict']} plan={entry.get('plan_source')}")
     print(f"\nscore -> {run_dir / 'score.json'}")
     return 0
 
@@ -361,7 +383,7 @@ def verify_questions(args: argparse.Namespace) -> int:
     failures = 0
     with pymupdf.open(Path(args.pdf)) as document:
         for case in body["cases"]:
-            for cell in case["expected"]["cells"]:
+            for cell in case["expected"].get("cells", []):
                 page_text = _compact(document[cell["page"] - 1].get_text("text", sort=True))
                 anchor = _compact(cell["row_label"]).split("（")[0]
                 checks = {"row_label": anchor in page_text,
