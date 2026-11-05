@@ -23,6 +23,7 @@ class Intent(StrEnum):
     FACT_LOOKUP = "FACT_LOOKUP"
     COMPARISON = "COMPARISON"
     FORWARD_VIEW = "FORWARD_VIEW"
+    MANAGEMENT_EXPLANATION = "MANAGEMENT_EXPLANATION"
     AMBIGUOUS = "AMBIGUOUS"
 
 
@@ -38,6 +39,12 @@ _COMPARISON_CUES = (
     "变化", "相比", "对比", "较上", "差额", "差异", "高于", "低于",
     "提升了", "减少了", "多了", "少了",
 )
+# Explanation cues are about the ask, not the answer. They route to the
+# evidence-preview path, which never publishes a management claim.
+_MANAGEMENT_CUES = (
+    "为什么", "为何", "原因", "解释", "说明", "管理层讨论", "经营讨论",
+    "变动原因", "什么原因", "如何解释", "怎么解释",
+)
 _AMBIGUOUS_CUES = (
     "为什么", "为何", "如何", "怎么", "是否", "评价", "看法", "建议",
     "意味着", "影响", "趋势", "前景", "分析",
@@ -46,6 +53,7 @@ _AMBIGUOUS_CUES = (
 _REASON = {
     Intent.COMPARISON: "COMPARISON_NOT_PUBLISHABLE",
     Intent.FORWARD_VIEW: "FORWARD_VIEW_NOT_PUBLISHABLE",
+    Intent.MANAGEMENT_EXPLANATION: "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
     Intent.AMBIGUOUS: "QUESTION_INTENT_AMBIGUOUS",
 }
 
@@ -61,6 +69,8 @@ def classify_intent(question: str) -> Intent:
         return Intent.AMBIGUOUS
     if any(cue in text for cue in _FORWARD_CUES):
         return Intent.FORWARD_VIEW
+    if any(cue in text for cue in _MANAGEMENT_CUES):
+        return Intent.MANAGEMENT_EXPLANATION
     if any(cue in text for cue in _COMPARISON_CUES):
         return Intent.COMPARISON
     if any(cue in text for cue in _AMBIGUOUS_CUES):

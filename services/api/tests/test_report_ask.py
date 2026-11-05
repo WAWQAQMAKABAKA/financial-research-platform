@@ -361,3 +361,20 @@ def test_seven_metric_question_is_rejected_with_the_count():
     assert result["reason"] == "TOO_MANY_REQUIREMENTS"
     assert result["plan"] == {"status": "TOO_MANY_REQUIREMENTS", "detected": 7, "max": 6}
     assert result["facts"] == []
+
+
+def test_management_question_returns_a_withheld_preview():
+    result = rb.build_management_report(
+        REPORT_KEY, require_pdf(),
+        "600760 中航沈飞 2026 年半年度营业收入变动原因是什么？",
+        as_of=AS_OF,
+    )
+
+    assert result["status"] == "REPORT_WITHHELD"
+    assert result["reason"] == "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW"
+    assert result["facts"] == []
+    preview = result["management_preview"]
+    assert preview["status"] == "PREVIEW_ONLY_NOT_PUBLISHED"
+    assert preview["semantic_review"] == "NOT_PERFORMED"
+    assert preview["pointers"]
+    assert any("主要是受" in pointer["excerpt"] for pointer in preview["pointers"])

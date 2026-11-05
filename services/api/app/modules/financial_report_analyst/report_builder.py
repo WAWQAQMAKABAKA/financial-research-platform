@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
+import re
+import unicodedata
 
 import pymupdf
 
@@ -1007,6 +1009,181 @@ def build_multi_report(
         "facts": facts,
         "reviews": reviews_out,
         "publication": decision,
+        "limitations": limitations,
+        "report_storage": "NOT_PERSISTED",
+    }
+
+
+MANAGEMENT_VERSION = "m5-management-evidence-preview-v1"
+
+
+def _management_section_pages(path: Path) -> set[int]:
+    """Pages of the management discussion section, if the document has one."""
+    with pymupdf.open(path) as pdf:
+        start = None
+        for index in range(4, len(pdf) + 1):
+            if "管理层讨论与分析" in pdf[index - 1].get_text("text"):
+                start = index
+                break
+        if start is None:
+            return set()
+        end = None
+        for index in range(start + 1, len(pdf) + 1):
+            if re.search(r"第[一二三四五六七八九十]+节", pdf[index - 1].get_text("text")):
+                end = index
+                break
+        return set(range(start, end or (start + 10)))
+
+
+def _question_grams(question: str) -> set[str]:
+    normalized = re.sub(r"\s+", "", unicodedata.normalize("NFKC", question))
+    return {normalized[index:index + 2] for index in range(len(normalized) - 1)}
+
+
+def build_management_report(
+    report_key: str,
+    pdf_path: Path,
+    question: str,
+    *,
+    as_of: datetime,
+) -> dict:
+    """Management questions get an evidence preview that is never published.
+
+    The excerpt is taken from a canonical text span bound to the manifest. It is
+    a literal source preview only; management claims still require a semantic
+    review that this platform does not perform.
+    """
+    entry = source_workspace.REPORTS.get(report_key)
+    if entry is None or entry.authorization != source_workspace.AUTHORIZATION_MANIFEST:
+        raise source_workspace.UnknownReportError("REPORT_NOT_AUTHORIZED_IN_CORPUS")
+
+    document = corpus_manifest.load_corpus_manifest().require_report_key(report_key)
+    if document.to_source_document() != entry.source:
+        raise ValueError("MANIFEST_SOURCE_IDENTITY_MISMATCH")
+
+    if (not isinstance(question, str) or not question.strip()
+            or len(question) > MAX_QUESTION_CHARS):
+        return _withheld(
+            report_key, "QUESTION_INVALID", document=document,
+            extra={"request": {"question": question, "question_code": None}},
+        )
+
+    path = Path(pdf_path)
+    corpus_manifest.verify_document(document, pdf_path=path)
+
+    intent = intent_gate.classify_intent(question)
+    intent_block = {"value": intent.value, "version": intent_gate.INTENT_VERSION,
+                    "rejection_reason": intent_gate.rejection_reason(intent)}
+    if intent is not intent_gate.Intent.MANAGEMENT_EXPLANATION:
+        return _withheld(
+            report_key, "QUESTION_INTENT_AMBIGUOUS", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    try:
+        retrieval = canonical_retrieval.retrieve_report_evidence(
+            entry.source, path, question, as_of=as_of,
+        )
+    except ValueError as exc:
+        return _withheld(
+            report_key, str(exc) or "RETRIEVAL_FAILED", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    grams = _question_grams(question)
+    section_pages = _management_section_pages(path)
+    explanation_cues = ("下降", "减少", "变动", "原因", "主要系", "由于",
+                        "增加", "上升", "影响", "下滑", "增长")
+    candidates = []
+    with pymupdf.open(path) as pdf:
+        for page in sorted(section_pages):
+            text = pdf[page - 1].get_text("text")
+            for line in text.splitlines():
+                excerpt = line.strip()
+                compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", excerpt))
+                if len(compact) < 16:
+                    continue
+                metric_hits = sum(1 for gram in grams if gram in compact)
+                cue_hits = sum(1 for cue in explanation_cues if cue in compact)
+                if not metric_hits or not cue_hits:
+                    continue
+                digits = sum(ch.isdigit() for ch in compact)
+                score = metric_hits * 2 + cue_hits * 3 - digits * 0.05
+                candidates.append((score, page, excerpt))
+
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    pointers = []
+    seen = set()
+    for _, page, excerpt in candidates:
+        key = (page, excerpt)
+        if key in seen:
+            continue
+        seen.add(key)
+        pointers.append({
+            "page_number": page,
+            "excerpt": excerpt[:240],
+            "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
+            "explanation_cue_present": True,
+        })
+        if len(pointers) == 3:
+            break
+
+    if not pointers:
+        return _withheld(
+            report_key, "NO_MANAGEMENT_EVIDENCE", document=document,
+            extra={"request": {"question": question, "question_code": None},
+                   "intent": intent_block},
+        )
+
+    source = document.to_source_document()
+    question_sha = sha256(question.encode("utf-8")).hexdigest()
+    limitations = [
+        "管理层解释属于需语义审阅的声明；当前平台不发布这类声明，也不做语义审阅。",
+        "摘录只是原文预览，用于定位来源，不构成已发布的结论。",
+        "本报告不包含数字结论；数字事实请使用事实查询。",
+    ]
+    return {
+        "status": "REPORT_WITHHELD",
+        "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
+        "report_type": "MANAGEMENT_EVIDENCE_PREVIEW_REPORT",
+        "report_version": MANAGEMENT_VERSION,
+        "report_key": report_key,
+        "report_id": sha256(
+            f"{document.document_id}|{document.canonical_sha256}|"
+            f"{MANAGEMENT_VERSION}|{question_sha}".encode()
+        ).hexdigest(),
+        "issuer": {
+            "name": document.issuer_name, "ticker": document.ticker,
+            "report_period": document.report_period,
+        },
+        "source": {
+            "document_id": document.document_id,
+            "source_url": document.source_url,
+            "published_on": document.published_on.isoformat(),
+            "pit_available_at": source.pit_available_at.isoformat(),
+            "source_sha256": document.source_sha256,
+            "canonical_sha256": document.canonical_sha256,
+            "page_count": document.page_count,
+            "authorization_note": document.authorization_note,
+        },
+        "request": {"question": question, "question_code": QUESTION_CODE},
+        "intent": intent_block,
+        "retrieval": _retrieval_trace(retrieval),
+        "facts": [],
+        "management_preview": {
+            "status": "PREVIEW_ONLY_NOT_PUBLISHED",
+            "literal_check": "VERIFIED_CANONICAL_TEXT_SPAN_ONLY",
+            "semantic_review": "NOT_PERFORMED",
+            "pointers": pointers,
+        },
+        "publication": {
+            "may_publish": False,
+            "reason": "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW",
+            "policy_version": publication_policy.POLICY_VERSION,
+            "semantic_review": "NOT_PERFORMED",
+        },
         "limitations": limitations,
         "report_storage": "NOT_PERSISTED",
     }

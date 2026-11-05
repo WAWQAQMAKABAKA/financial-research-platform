@@ -145,10 +145,25 @@ type Report = {
   limitations: string[];
 };
 
+type ManagementPointer = {
+  page_number: number;
+  excerpt: string;
+  literal_check: string;
+  explanation_cue_present: boolean;
+};
+
+type ManagementPreview = {
+  status: string;
+  literal_check: string;
+  semantic_review: string;
+  pointers: ManagementPointer[];
+};
+
 type WithheldReport = {
   status: "REPORT_WITHHELD";
   reason: string;
   plan?: { status: string; detected: number; max: number } | null;
+  management_preview?: ManagementPreview | null;
   request?: { question: string; question_code: string | null } | null;
   retrieval?: Retrieval;
   selection?: Selection;
@@ -198,6 +213,9 @@ const REASONS: Record<string, string> = {
   FORWARD_VIEW_NOT_PUBLISHABLE: "前瞻或预测类问题不在本报告的发布范围内。",
   QUESTION_INTENT_AMBIGUOUS: "无法确定这是一个披露事实查询，因此不发布。",
   TOO_MANY_REQUIREMENTS: "问题包含的指标数量超过当前上限，请拆成多个问题。",
+  MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW:
+    "管理层解释属于需语义审阅的声明，当前不发布；以下仅为原文摘录预览。",
+  NO_MANAGEMENT_EVIDENCE: "在管理层讨论章节未找到与该问题相关的原文。",
 };
 
 function reasonText(reason: string): string {
@@ -492,6 +510,21 @@ async function ReportBody({ searchParams }: {
               <p className={styles.muted}>
                 识别到 {withheld.plan.detected} 个指标，当前最多支持 {withheld.plan.max} 个。
               </p>
+            )}
+            {withheld.management_preview && (
+              <div className={styles.managementPreview}>
+                <p className={styles.muted}>
+                  原文摘录预览 · 未发布 · 语义审阅未执行
+                </p>
+                <ul className={styles.withheldList}>
+                  {withheld.management_preview.pointers.map((pointer) => (
+                    <li key={`${pointer.page_number}-${pointer.excerpt.slice(0, 24)}`}>
+                      <strong>第 {pointer.page_number} 页</strong>
+                      <span>{pointer.excerpt}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             <p className={styles.muted}>
               未展示任何金额。研究发布：已阻止 · 财务语义核验：未进行。

@@ -61,3 +61,17 @@ def test_describe_exposes_version_and_reason():
         "intent_version": gate.INTENT_VERSION,
         "rejection_reason": "COMPARISON_NOT_PUBLISHABLE",
     }
+
+
+def test_management_explanation_questions_have_their_own_intent():
+    assert (gate.classify_intent("净利润为什么下降？")
+            is gate.Intent.MANAGEMENT_EXPLANATION)
+    assert (gate.classify_intent("营业收入变动原因是什么？")
+            is gate.Intent.MANAGEMENT_EXPLANATION)
+    assert (gate.rejection_reason(gate.Intent.MANAGEMENT_EXPLANATION)
+            == "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW")
+
+
+def test_a_quantitative_comparison_stays_a_comparison():
+    assert (gate.classify_intent("净利润比去年下降多少？")
+            is gate.Intent.COMPARISON)

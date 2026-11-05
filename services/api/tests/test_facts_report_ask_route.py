@@ -288,3 +288,22 @@ def test_partial_multi_repair_roundtrip(monkeypatch):
     assert report["status"] == "REPORT_READY"
     assert report["coverage"]["complete"] is True
     assert "59,650,843.12" in {fact["value_verbatim"] for fact in report["facts"]}
+
+
+def test_management_question_returns_a_preview_not_a_publication(monkeypatch):
+    if not PDF.is_file():
+        pytest.skip("authorized 600760 PDF not provisioned locally")
+    authorize(monkeypatch)
+    headers = {"x-frp-local-token": TOKEN}
+
+    response = TestClient(app).post(
+        ASK_URL,
+        json={"question": "600760 中航沈飞 2026 年半年度营业收入变动原因是什么？"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    report = response.json()
+    assert report["status"] == "REPORT_WITHHELD"
+    assert report["reason"] == "MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW"
+    assert report["facts"] == []
+    assert report["management_preview"]["pointers"]

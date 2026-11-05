@@ -1,0 +1,59 @@
+# 0020 — Management-explanation evidence preview (M5 v1)
+
+Date: 2026-11-05
+Status: accepted for M5 v1 (single document 600760, management discussion section)
+
+## Context
+
+Users ask why a figure moved ("净利润为什么下降"). Until now such questions fell
+into the generic `AMBIGUOUS` intent and were withheld with no source pointer. The
+platform has no qualified semantic reviewer, and the publication contract forbids
+publishing management explanations without one.
+
+## Decision
+
+A new deterministic intent class, `MANAGEMENT_EXPLANATION`, is recognized from
+explanation cues (为什么/为何/原因/解释/说明/管理层讨论/经营讨论/变动原因/什么原因/
+如何解释/怎么解释). Forward-view cues still win first, then explanation cues, then
+comparison, then ambiguity.
+
+`build_management_report` returns a **withheld evidence preview**:
+
+- manifest identity, PDF bytes, PIT and canonical binding are verified by the
+  existing retrieval path;
+- the management discussion section is located deterministically from the page
+  headings (`管理层讨论与分析` up to the next `第…节`), so cover pages, governance
+  and incentive tables are not offered as explanations;
+- lines in that section that contain both a question term and an explanation cue
+  are scored, de-duplicated and capped at three pointers;
+- each pointer carries a page number, a verbatim page-text excerpt (the literal
+  reviewer scope is `VERIFIED_PAGE_TEXT_SUBSTRING`) and an explicit
+  `explanation_cue_present` flag;
+- the report is `REPORT_WITHHELD` with reason
+  `MANAGEMENT_EXPLANATION_REQUIRES_SEMANTIC_REVIEW`, no facts, no claims, no
+  review records and `semantic_review = NOT_PERFORMED`;
+- the page renders the pointers under "原文摘录预览 · 未发布 · 语义审阅未执行".
+
+If the section exists but no line matches, the report is withheld with
+`NO_MANAGEMENT_EVIDENCE`; it never falls back to unrelated pages.
+
+## Why not publish
+
+The publication policy admits only `OBSERVED_FACT` claims under `FACTS_ONLY`.
+Management explanations require a qualified semantic review, which this platform
+does not implement. The preview is source localization, not a conclusion: it
+does not answer the question, does not compare periods and does not state a cause.
+
+## Limits
+
+- Lexical preview only; a section that does not mention the metric yields
+  `NO_MANAGEMENT_EVIDENCE`.
+- Up to three pointers; no cross-page assembly, no paraphrase, no numbers.
+- The model is not involved; no semantic review is claimed.
+- The preview text is source content and must not be reused as a claim.
+
+## Next
+
+A semantic-review contract (reviewer identity, rubric, evidence standard) is a
+prerequisite for any published management explanation. Until then this path stays
+withheld.

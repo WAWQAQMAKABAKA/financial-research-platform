@@ -735,7 +735,12 @@ def local_facts_report_ask(
                         plan_api_key = key
                 finally:
                     _M4_PLAN_LLM_LOCK.release()
-        if len(evidence_plan.split_facets(request.question)) >= 2 or plan_api_key:
+        if (report_builder.intent_gate.classify_intent(request.question)
+                is report_builder.intent_gate.Intent.MANAGEMENT_EXPLANATION):
+            result = report_builder.build_management_report(
+                report_key, Path(pdf_path), request.question, as_of=as_of,
+            )
+        elif len(evidence_plan.split_facets(request.question)) >= 2 or plan_api_key:
             result = report_builder.build_multi_report(
                 report_key, Path(pdf_path), request.question, as_of=as_of,
                 repair_secret=repair_secret, api_key=plan_api_key,
