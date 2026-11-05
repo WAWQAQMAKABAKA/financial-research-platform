@@ -66,6 +66,29 @@ RUN="data/private/m4-repair-eval/run_$(date -u +%Y%m%dT%H%M%SZ)"
   complete.
 - Repair never calls the model; the paid path plays no role here.
 
+## v2 — repair under the LLM plan path (`86085f5`)
+
+Same frozen 6-case set, `--with-llm` (plan budget 8). All six cases used
+`LLM_PROPOSAL_VALIDATED` and the proposed facets matched the questions:
+
+| Metric | v1 deterministic | v2 LLM plan |
+|---|---|---|
+| LLM-planned cases | 0 | **6/6** |
+| Repair offered | 2/2 | 2/2 |
+| Candidate recall / top-1 | 1.0 / 2/2 | 1.0 / 2/2 |
+| Confirmation success | 2/2 | 2/2 |
+| Clean partials without candidate | 2/2 | 2/2 |
+| Complete controls | 2/2 | 2/2 |
+| Unexpected repair offers | 0 | 0 |
+| Unsafe publications | 0 | 0 |
+| Latency avg / max | 19.8 s / 33.2 s | 18.1 s / 29.0 s |
+
+The repair candidates are produced deterministically from the same verified
+rows, so the LLM plan does not change candidate quality here. What changes is
+the recorded interpretation (`coverage.plan_source`) and one paid call per
+multi-fact question. The value of LLM planning would appear on question wording
+the conjunction split mis-parses, which this set does not contain.
+
 ## Limitations
 
 - Two repair cases, one document; not a holdout.
@@ -79,5 +102,5 @@ RUN="data/private/m4-repair-eval/run_$(date -u +%Y%m%dT%H%M%SZ)"
 
 1. Management-text requirements as a separate evidence kind.
 2. Unseen-document validation once a second document is authorized.
-3. Capture the same repair set under the LLM plan path to compare candidate
-   quality.
+3. A wording set where the conjunction split fails, to measure LLM planning
+   value rather than parity.
