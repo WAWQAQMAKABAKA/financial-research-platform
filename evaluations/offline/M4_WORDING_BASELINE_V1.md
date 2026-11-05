@@ -89,11 +89,33 @@ single-path row match both accept up to six requirements.
 | W-04 | **COMPLETE 4/4** — dynamic ceiling admits the fourth metric |
 | W-05 | **OVER_LIMIT_REJECTED** — `TOO_MANY_REQUIREMENTS`, detected 7, max 6 |
 
-**LLM capture v2: NOT_MEASURED.** W-01 completed 2/2 with
-`LLM_PROPOSAL_VALIDATED`, but the host was starved (load average 10–22, score
-and capture processes descheduled for tens of minutes) and the five-case run was
-stopped before completing. This is an environment limitation, not a product
-result.
+**LLM capture v2 (measured at `bc852ef`, after the host recovered):**
+
+| Metric | Deterministic | LLM plan |
+|---|---|---|
+| Cell recall | 0.8333 (10/12) | **1.0 (12/12)** |
+| Complete reports | 1 | **4** |
+| Single-report answers | 2 | 0 |
+| Under-decomposition | 0 | **0** |
+| Over-answer / unsafe | 0 | **0** |
+| Over-limit correctly rejected | 1 | 1 |
+| LLM-planned cases | 0 | 4 |
+| Latency avg / max | 41.3 s / 56.9 s* | 12.1 s / 13.5 s |
+
+\*The deterministic capture ran while the host load was 10–22 and its latency is
+not comparable.
+
+| Case | Deterministic | LLM plan |
+|---|---|---|
+| W-01 | 2 facts single report | COMPLETE 2/2 |
+| W-02 | 3 facts single report | COMPLETE 3/3 |
+| W-03 | partial 1 fact | COMPLETE 3/3 |
+| W-04 | COMPLETE 4/4 | COMPLETE 4/4 |
+| W-05 | rejected, detected 7 | rejected, detected 7 |
+
+With the six-requirement ceiling the model can answer all four requested metrics
+(W-04) and still rejects seven with the count (W-05). No under-decomposition and
+no over-answer in either run.
 
 ## Limitations
 
@@ -106,7 +128,6 @@ result.
 
 ## Next
 
-1. Re-run the LLM v2 capture when the host is idle; the deterministic result and
-   the over-limit rejection are already measured.
-2. Management-text requirements as a separate evidence kind.
-3. Unseen-document validation once a second document is authorized.
+1. Management-text requirements as a separate evidence kind.
+2. Unseen-document validation once a second document is authorized.
+3. Re-run the full suite on a loaded host to confirm stability, not behavior.
