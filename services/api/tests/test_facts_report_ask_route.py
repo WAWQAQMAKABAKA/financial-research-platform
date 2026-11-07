@@ -501,3 +501,43 @@ def test_a_non_allowlisted_reviewer_is_not_reused(tmp_path):
         document_id="d", source_sha256="s", canonical_sha256="n",
         page_number=1, allowlist=("local-reviewer",), storage_dir=storage,
     ) is None
+
+
+def _build_mixed(question: str):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import report_builder
+    return report_builder.build_mixed_report(
+        "600760-2026H1", PDF, question,
+        as_of=datetime(2026, 11, 3, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+        review_secret="test-review-secret",
+    )
+
+
+def test_mixed_question_reuses_an_admitted_management_review(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    recorded = decide(packet)
+    assert recorded.status_code == 200
+    review_id = recorded.json()["review"]["review_id"]
+
+    report = _build_mixed(
+        "600760 中航沈飞 2026 年半年度营业收入是多少？营业收入变动原因是什么？"
+    )
+    assert report["status"] == "REPORT_READY"
+    assert report["report_type"] == "FACTS_WITH_MANAGEMENT_CLAIM_REPORT"
+    assert report["facts"]
+    assert report["management_publication"]["may_publish"] is True
+    assert report["management_claim"]["review"]["review_id"] == review_id
+    assert report["review_packet"] is None
+
+
+def test_mixed_question_with_changed_management_does_not_reuse(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    assert decide(packet).status_code == 200
+
+    report = _build_mixed(
+        "600760 中航沈飞 2026 年半年度营业收入是多少？营业成本变动原因是什么？"
+    )
+    assert report["status"] == "REPORT_READY"
+    assert report["management_publication"]["may_publish"] is False
+    assert report["review_packet"]

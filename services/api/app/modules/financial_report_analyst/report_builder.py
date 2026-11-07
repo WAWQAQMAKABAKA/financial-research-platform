@@ -1374,21 +1374,58 @@ def build_mixed_report(
         "semantic_review": "NOT_PERFORMED",
     }
     composed["review_packet"] = None
-    if review_secret and pointers:
+    if pointers:
         top = pointers[0]
         with pymupdf.open(path) as pdf:
             context_text = pdf[top["page_number"] - 1].get_text("text").strip()
-        composed["review_packet"] = semantic_review.build_packet(
-            secret=review_secret, question=question, report_key=report_key,
-            claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
-            page_number=top["page_number"], excerpt=top["excerpt"],
-            context=context_text,
-            document={
-                "document_id": document.document_id,
-                "source_sha256": document.source_sha256,
-                "canonical_sha256": document.canonical_sha256,
-            },
+        excerpt_sha = sha256(top["excerpt"].encode("utf-8")).hexdigest()
+        context_sha = sha256(context_text.encode("utf-8")).hexdigest()
+        if review_secret:
+            composed["review_packet"] = semantic_review.build_packet(
+                secret=review_secret, question=question, report_key=report_key,
+                claim_type="MANAGEMENT_EXPLANATION", claim_text=top["excerpt"],
+                page_number=top["page_number"], excerpt=top["excerpt"],
+                context=context_text,
+                document={
+                    "document_id": document.document_id,
+                    "source_sha256": document.source_sha256,
+                    "canonical_sha256": document.canonical_sha256,
+                },
+            )
+        stored = semantic_review.find_admitted_review(
+            claim_text=top["excerpt"], excerpt_sha256=excerpt_sha,
+            context_sha256=context_sha, document_id=document.document_id,
+            source_sha256=document.source_sha256,
+            canonical_sha256=document.canonical_sha256,
+            page_number=top["page_number"],
+            allowlist=semantic_review.reviewers_from_env(),
         )
+        if stored is not None:
+            composed["report_type"] = "FACTS_WITH_MANAGEMENT_CLAIM_REPORT"
+            composed["review_packet"] = None
+            composed["management_claim"] = {
+                "claim_type": "MANAGEMENT_EXPLANATION",
+                "text": top["excerpt"],
+                "evidence": {
+                    "page_number": top["page_number"],
+                    "excerpt": top["excerpt"],
+                    "excerpt_sha256": excerpt_sha,
+                },
+                "review": stored,
+            }
+            composed["management_publication"] = {
+                "may_publish": True,
+                "reason": None,
+                "development_only": True,
+                "independent_validation": False,
+                "review_id": stored.get("review_id"),
+                "reviewer_id": stored.get("reviewer_id"),
+                "research_publication": "MANAGEMENT_DEVELOPMENT_ONLY",
+                "financial_semantic_review": "DEVELOPMENT_ONLY",
+            }
+            composed["limitations"] = list(composed.get("limitations") or []) + [
+                "管理层解释已由 local-reviewer 显式 ADMIT，仅限开发环境，未经独立验证。",
+            ]
     composed["development_only"] = True
     composed["independent_validation"] = False
     composed["limitations"] = list(composed.get("limitations") or []) + [

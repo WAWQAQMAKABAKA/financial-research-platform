@@ -130,8 +130,9 @@ type Report = {
   request: { question: string; question_code: string | null };
   coverage?: Coverage;
   management_preview?: ManagementPreview | null;
+  management_claim?: ManagementClaim | null;
   review_packet?: ReviewPacket | null;
-  management_publication?: { may_publish: boolean; reason: string } | null;
+  management_publication?: { may_publish: boolean; reason: string | null } | null;
   retrieval?: Retrieval;
   selection?: Selection;
   facts: Fact[];
@@ -244,6 +245,20 @@ function ManagementReportBody({ report }: { report: ManagementReport }) {
     </div>
   );
 }
+
+type ManagementClaim = {
+  claim_type: string;
+  text: string;
+  evidence: { page_number: number; excerpt: string; excerpt_sha256: string };
+  review: {
+    review_id: string;
+    reviewer_id: string;
+    verdict: string;
+    rationale: string;
+    recorded_at: string;
+    checklist_notes?: Record<string, string>;
+  };
+};
 
 type ReviewPacket = {
   packet_id: string;
@@ -696,7 +711,21 @@ async function ReportBody({ searchParams }: {
         <div>
           {report.facts.map((fact) => <FactCard key={fact.claim_id} fact={fact} />)}
 
-          {report.management_preview?.pointers?.length ? (
+          {report.management_claim ? (
+            <section className={styles.reviewCard} aria-label="已审阅的管理层解释">
+              <p className={styles.kicker}>管理层解释 / DEVELOPMENT ONLY</p>
+              <p><strong>{report.management_claim.text}</strong></p>
+              <p className={styles.muted}>
+                第 {report.management_claim.evidence.page_number} 页 · 审阅
+                {" "}{report.management_claim.review.reviewer_id} ·
+                {" "}{report.management_claim.review.verdict} ·
+                {" "}{report.management_claim.review.review_id}
+              </p>
+              <p className={styles.muted}>
+                开发环境审阅 · 未经独立验证 · 不用于客户发布
+              </p>
+            </section>
+          ) : report.management_preview?.pointers?.length ? (
             <section className={styles.reviewCard} aria-label="管理层原文预览">
               <p className={styles.kicker}>管理层原文预览 / NOT PUBLISHED</p>
               <p className={styles.muted}>
