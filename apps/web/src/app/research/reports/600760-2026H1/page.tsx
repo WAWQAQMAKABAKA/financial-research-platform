@@ -162,6 +162,89 @@ type ManagementPreview = {
   pointers: ManagementPointer[];
 };
 
+type ManagementReport = {
+  status: "REPORT_READY";
+  report_type: "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT";
+  report_key: string;
+  report_id: string;
+  development_only: boolean;
+  independent_validation: boolean;
+  claim: {
+    claim_type: string;
+    text: string;
+    evidence: { page_number: number; excerpt: string; excerpt_sha256: string };
+  };
+  review: {
+    review_id: string;
+    reviewer_id: string;
+    verdict: string;
+    checklist: Record<string, boolean>;
+    checklist_notes?: Record<string, string>;
+    rationale: string;
+    recorded_at: string;
+  };
+  publication: {
+    may_publish: boolean;
+    development_only: boolean;
+    independent_validation: boolean;
+  };
+  limitations: string[];
+};
+
+function isManagementReport(value: unknown): value is ManagementReport {
+  if (typeof value !== "object" || value === null) return false;
+  const report = value as ManagementReport;
+  return (
+    report.status === "REPORT_READY" &&
+    report.report_type === "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT" &&
+    report.report_key === REPORT_KEY &&
+    typeof report.claim?.text === "string" &&
+    typeof report.review?.reviewer_id === "string" &&
+    typeof report.review?.rationale === "string" &&
+    report.development_only === true &&
+    report.independent_validation === false
+  );
+}
+
+function ManagementReportBody({ report }: { report: ManagementReport }) {
+  return (
+    <div className={styles.detail}>
+      <section className={styles.boundary} aria-label="审阅边界">
+        <strong>开发环境审阅 · 未经独立验证 · 不用于客户发布</strong>
+        <p>
+          该管理层解释由 {report.review.reviewer_id} 显式审阅并给出
+          {" "}{report.review.verdict}；平台未自动生成该结论。
+        </p>
+      </section>
+
+      <section className={styles.reviewCard} aria-label="已审阅的管理层解释">
+        <p className={styles.kicker}>管理层解释 / MANAGEMENT EXPLANATION</p>
+        <p><strong>{report.claim.text}</strong></p>
+        <p className={styles.muted}>证据：第 {report.claim.evidence.page_number} 页</p>
+        <ul className={styles.withheldList}>
+          {Object.entries(report.review.checklist).map(([key, value]) => (
+            <li key={key}>
+              <strong>{value ? "✓" : "✗"} {key}</strong>
+              <span>{report.review.checklist_notes?.[key] ?? ""}</span>
+            </li>
+          ))}
+        </ul>
+        <p className={styles.muted}>理由：{report.review.rationale}</p>
+        <p className={styles.muted}>
+          审阅记录：{report.review.review_id} · {report.review.recorded_at}
+        </p>
+      </section>
+
+      <section className={styles.reviewCard} aria-label="限制">
+        <p className={styles.kicker}>限制 / LIMITATIONS</p>
+        <ul className={styles.withheldList}>
+          {report.limitations.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 type ReviewPacket = {
   packet_id: string;
   claim_type: string;
@@ -508,6 +591,7 @@ async function ReportBody({ searchParams }: {
       : `${base}/api/v1/research/reports/${REPORT_KEY}/ask`;
 
   let report: Report | null = null;
+  let management: ManagementReport | null = null;
   let withheld: WithheldReport | null = null;
   let clarification: Clarification | null = null;
   try {
@@ -529,6 +613,7 @@ async function ReportBody({ searchParams }: {
     if (response.ok) {
       const payload: unknown = await response.json();
       if (isReport(payload)) report = payload;
+      else if (isManagementReport(payload)) management = payload;
       else if (isWithheld(payload)) withheld = payload;
       else if (isClarification(payload)) clarification = payload;
     }
@@ -538,6 +623,10 @@ async function ReportBody({ searchParams }: {
 
   if (clarification !== null) {
     return <ClarificationBody clarification={clarification} />;
+  }
+
+  if (management !== null) {
+    return <ManagementReportBody report={management} />;
   }
 
   if (withheld !== null) {

@@ -1,4 +1,5 @@
 """M2a question route: dev-only access control and response shape."""
+import json
 from pathlib import Path
 
 import pytest
@@ -290,10 +291,11 @@ def test_partial_multi_repair_roundtrip(monkeypatch):
     assert "59,650,843.12" in {fact["value_verbatim"] for fact in report["facts"]}
 
 
-def test_management_question_returns_a_preview_not_a_publication(monkeypatch):
+def test_management_question_returns_a_preview_not_a_publication(monkeypatch, tmp_path):
     if not PDF.is_file():
         pytest.skip("authorized 600760 PDF not provisioned locally")
     authorize(monkeypatch)
+    monkeypatch.setenv("FRP_SEMANTIC_REVIEW_STORAGE", str(tmp_path / "reviews"))
     headers = {"x-frp-local-token": TOKEN}
 
     response = TestClient(app).post(
@@ -432,3 +434,70 @@ def test_checklist_notes_are_recorded(monkeypatch, tmp_path):
     response = decide(packet, checklist_notes=notes)
     assert response.status_code == 200
     assert response.json()["review"]["checklist_notes"] == notes
+
+
+def _build_management(question: str):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from app.modules.financial_report_analyst import report_builder
+    return report_builder.build_management_report(
+        "600760-2026H1", PDF, question,
+        as_of=datetime(2026, 11, 3, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+        review_secret="test-review-secret",
+    )
+
+
+def test_an_admitted_review_is_reused_for_the_same_claim(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    recorded = decide(packet)
+    assert recorded.status_code == 200
+    review_id = recorded.json()["review"]["review_id"]
+
+    report = _build_management(MANAGEMENT_Q)
+    assert report["status"] == "REPORT_READY"
+    assert report["report_type"] == "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT"
+    assert report["review"]["review_id"] == review_id
+    assert report["development_only"] is True
+    assert report["independent_validation"] is False
+
+
+def test_a_changed_claim_is_not_reused(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    assert decide(packet).status_code == 200
+
+    other = "600760 中航沈飞 2026 年半年度营业成本变动原因是什么？"
+    report = _build_management(other)
+    assert report["status"] == "REPORT_WITHHELD"
+    assert report["review_packet"]
+
+
+def test_a_rejected_review_is_not_reused(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    rejected = decide(packet, verdict="REJECT", checklist={key: False for key in CHECKLIST_KEYS})
+    assert rejected.status_code == 200
+
+    report = _build_management(MANAGEMENT_Q)
+    assert report["status"] == "REPORT_WITHHELD"
+    assert report["review_packet"]
+
+
+def test_a_non_allowlisted_reviewer_is_not_reused(tmp_path):
+    from app.modules.financial_report_analyst import semantic_review
+    storage = tmp_path / "reviews"
+    storage.mkdir()
+    (storage / "x.json").write_text(
+        json.dumps({
+            "review_id": "x", "reviewer_id": "other", "verdict": "ADMIT",
+            "development_only": True,
+            "checklist": {key: True for key in CHECKLIST_KEYS},
+            "claim_text": "c", "excerpt_sha256": "e", "context_sha256": "k",
+            "document_id": "d", "source_sha256": "s", "canonical_sha256": "n",
+            "page_number": 1,
+        }),
+        encoding="utf-8",
+    )
+    assert semantic_review.find_admitted_review(
+        claim_text="c", excerpt_sha256="e", context_sha256="k",
+        document_id="d", source_sha256="s", canonical_sha256="n",
+        page_number=1, allowlist=("local-reviewer",), storage_dir=storage,
+    ) is None

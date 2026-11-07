@@ -1199,6 +1199,43 @@ def build_management_report(
             },
         )
 
+    if packet is not None:
+        stored = semantic_review.find_admitted_review(
+            claim_text=packet["claim_text"],
+            excerpt_sha256=packet["evidence"]["excerpt_sha256"],
+            context_sha256=packet["context_sha256"],
+            document_id=document.document_id,
+            source_sha256=document.source_sha256,
+            canonical_sha256=document.canonical_sha256,
+            page_number=packet["evidence"]["page_number"],
+            allowlist=semantic_review.reviewers_from_env(),
+        )
+        if stored is not None:
+            source = document.to_source_document()
+            return semantic_review.development_report(
+                claim_text=packet["claim_text"],
+                page_number=packet["evidence"]["page_number"],
+                excerpt=packet["evidence"]["excerpt"],
+                excerpt_sha256=packet["evidence"]["excerpt_sha256"],
+                context_sha256=packet["context_sha256"],
+                report_key=report_key,
+                question=question,
+                document={
+                    "document_id": document.document_id,
+                    "source_sha256": document.source_sha256,
+                    "canonical_sha256": document.canonical_sha256,
+                    "source_url": document.source_url,
+                    "published_on": document.published_on.isoformat(),
+                    "pit_available_at": source.pit_available_at.isoformat(),
+                    "page_count": document.page_count,
+                    "issuer_name": document.issuer_name,
+                    "ticker": document.ticker,
+                    "report_period": document.report_period,
+                    "authorization_note": document.authorization_note,
+                },
+                review=stored,
+            )
+
     if not pointers:
         return _withheld(
             report_key, "NO_MANAGEMENT_EVIDENCE", document=document,

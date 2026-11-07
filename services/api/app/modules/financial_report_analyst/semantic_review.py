@@ -278,3 +278,139 @@ def decide_development_publication(
         "review_id": review.get("review_id"),
         "reviewer_id": review.get("reviewer_id"),
     }
+
+
+def default_storage_dir() -> Path:
+    configured = os.environ.get("FRP_SEMANTIC_REVIEW_STORAGE")
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parents[5] / "data/private/semantic-reviews"
+
+
+def find_admitted_review(
+    *,
+    claim_text: str,
+    excerpt_sha256: str,
+    context_sha256: str | None,
+    document_id: str,
+    source_sha256: str,
+    canonical_sha256: str,
+    page_number: int,
+    allowlist: tuple[str, ...],
+    storage_dir: Path | None = None,
+) -> dict | None:
+    """Return the newest matching ADMIT record, or None.
+
+    A stored review is reused only for the identical claim, evidence, context and
+    document. Changed content always needs a new packet and a new decision.
+    """
+    directory = storage_dir or default_storage_dir()
+    if not directory.is_dir():
+        return None
+    matches = []
+    for path in directory.glob("*.json"):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(record, dict):
+            continue
+        if record.get("verdict") != "ADMIT":
+            continue
+        if record.get("reviewer_id") not in allowlist:
+            continue
+        if record.get("development_only") is not True:
+            continue
+        checklist = record.get("checklist") or {}
+        if not all(checklist.get(key) is True for key in CHECKLIST_KEYS):
+            continue
+        if record.get("claim_text") != claim_text:
+            continue
+        if record.get("excerpt_sha256") != excerpt_sha256:
+            continue
+        if context_sha256 is not None and record.get("context_sha256") != context_sha256:
+            continue
+        if record.get("document_id") != document_id:
+            continue
+        if record.get("source_sha256") != source_sha256:
+            continue
+        if record.get("canonical_sha256") != canonical_sha256:
+            continue
+        if record.get("page_number") != page_number:
+            continue
+        matches.append(record)
+    if not matches:
+        return None
+    matches.sort(key=lambda item: item.get("recorded_at") or "")
+    return matches[-1]
+
+
+def development_report(
+    *,
+    claim_text: str,
+    page_number: int,
+    excerpt: str,
+    excerpt_sha256: str,
+    context_sha256: str | None,
+    report_key: str,
+    question: str,
+    document: dict,
+    review: dict,
+) -> dict:
+    report_id = sha256(
+        f"{document['document_id']}|{document['canonical_sha256']}|"
+        f"{REVIEW_VERSION}|{sha256(claim_text.encode('utf-8')).hexdigest()}".encode()
+    ).hexdigest()
+    return {
+        "status": "REPORT_READY",
+        "report_type": "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT",
+        "report_version": REVIEW_VERSION,
+        "report_key": report_key,
+        "report_id": report_id,
+        "development_only": True,
+        "independent_validation": False,
+        "issuer": {
+            "name": document.get("issuer_name"),
+            "ticker": document.get("ticker"),
+            "report_period": document.get("report_period"),
+        },
+        "source": {
+            "document_id": document["document_id"],
+            "source_url": document.get("source_url"),
+            "published_on": document.get("published_on"),
+            "pit_available_at": document.get("pit_available_at"),
+            "source_sha256": document["source_sha256"],
+            "canonical_sha256": document["canonical_sha256"],
+            "page_count": document.get("page_count"),
+            "authorization_note": document.get("authorization_note"),
+        },
+        "request": {"question": question, "question_code": None},
+        "claim": {
+            "claim_type": "MANAGEMENT_EXPLANATION",
+            "text": claim_text,
+            "evidence": {
+                "page_number": page_number,
+                "excerpt": excerpt,
+                "excerpt_sha256": excerpt_sha256,
+                "context_sha256": context_sha256,
+                "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
+            },
+        },
+        "review": review,
+        "publication": {
+            "may_publish": True,
+            "reason": None,
+            "development_only": True,
+            "independent_validation": False,
+            "review_id": review.get("review_id"),
+            "reviewer_id": review.get("reviewer_id"),
+            "research_publication": "MANAGEMENT_DEVELOPMENT_ONLY",
+            "financial_semantic_review": "DEVELOPMENT_ONLY",
+        },
+        "limitations": [
+            "开发环境审阅（local-reviewer），未经独立验证；不得用于客户发布。",
+            "只覆盖这一条管理层解释 claim，不覆盖其他主张。",
+            "语义审阅由人做出；平台不自动生成 ADMIT。",
+            "该解释归属于管理层披露，不是平台的分析结论。",
+        ],
+    }

@@ -48,6 +48,19 @@ withheld with their own reasons. The result is a
 `MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT` with `development_only = true` and
 `independent_validation = false`; every page and record carries the same labels.
 
+## Reuse of an admitted review
+
+The ask path looks up stored reviews before returning a packet. A review is
+reused only when all of the following match exactly: claim text, excerpt hash,
+context hash, page, document id, source hash, canonical hash. The reviewer must
+be allowlisted, the verdict must be ADMIT, all six checks must be true, and the
+record must be development-only.
+
+On a match the request returns the development report with the stored review
+attached (still `development_only`, `independent_validation = false`). A REJECT,
+UNCERTAIN, non-allowlisted reviewer or any changed content does not match and the
+request returns a fresh packet. The newest matching record wins.
+
 ## Why these limits
 
 - The development reviewer is `local-reviewer`. This is not independent

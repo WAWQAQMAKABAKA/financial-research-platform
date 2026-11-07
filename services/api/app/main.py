@@ -988,28 +988,27 @@ def decide_semantic_review(
             or document.canonical_sha256 != payload.get("canonical_sha256")):
         raise HTTPException(status_code=422, detail="REVIEW_SOURCE_MISMATCH")
 
-    return {
-        "status": "REPORT_READY",
-        "report_type": "MANAGEMENT_EXPLANATION_DEVELOPMENT_REPORT",
-        "report_version": semantic_review.REVIEW_VERSION,
-        "development_only": True,
-        "independent_validation": False,
-        "report_key": payload["report_key"],
-        "claim": {
-            "claim_type": "MANAGEMENT_EXPLANATION",
-            "text": payload["claim_text"],
-            "evidence": {
-                "page_number": payload["page_number"],
-                "excerpt": payload["excerpt"],
-                "excerpt_sha256": payload["excerpt_sha256"],
-                "literal_check": "VERIFIED_PAGE_TEXT_SUBSTRING",
-            },
+    source = document.to_source_document()
+    return semantic_review.development_report(
+        claim_text=payload["claim_text"],
+        page_number=payload["page_number"],
+        excerpt=payload["excerpt"],
+        excerpt_sha256=payload["excerpt_sha256"],
+        context_sha256=payload.get("context_sha256"),
+        report_key=payload["report_key"],
+        question=payload["question"],
+        document={
+            "document_id": document.document_id,
+            "source_sha256": document.source_sha256,
+            "canonical_sha256": document.canonical_sha256,
+            "source_url": document.source_url,
+            "published_on": document.published_on.isoformat(),
+            "pit_available_at": source.pit_available_at.isoformat(),
+            "page_count": document.page_count,
+            "issuer_name": document.issuer_name,
+            "ticker": document.ticker,
+            "report_period": document.report_period,
+            "authorization_note": document.authorization_note,
         },
-        "review": record,
-        "publication": decision,
-        "limitations": [
-            "开发环境审阅（local-reviewer），未经独立验证；不得用于客户发布。",
-            "审阅只针对单条管理层解释 claim，不覆盖其他主张。",
-            "语义审阅由人做出；平台不自动生成 ADMIT。",
-        ],
-    }
+        review=record,
+    )
