@@ -19,8 +19,9 @@ the claim text (verbatim source, continuation lines joined so the claim is a
 complete sentence). The packet contains question, report key, claim type, claim
 text, page number, excerpt, excerpt SHA-256, the complete page text as `context`,
 `context_sha256`, document identity, a fixed six-item checklist (metric identity, period, entity, basis, evidence
-support, no overreach), the allowlisted reviewers, a 900-second expiry and a
-development-only marker. The packet is HMAC-signed with the local secret.
+support, "whether it adds assertions beyond the source"), the allowlisted
+reviewers, an expiry (900 seconds by default; `FRP_SEMANTIC_REVIEW_TTL` overrides
+it for a longer manual review) and a development-only marker. The packet is HMAC-signed with the local secret.
 
 **Pause.** `POST /ask` never decides. It returns the packet with
 `status = AWAITING_EXPLICIT_HUMAN_DECISION` and keeps the report withheld. No
@@ -54,6 +55,8 @@ withheld with their own reasons. The result is a
 - The reviewer identity is authenticated only by the local dev token plus the
   allowlist; this is not production authentication.
 - The decision is explicit input. Nothing in the runtime fabricates an ADMIT.
+- The sixth check is phrased so that `true` means "no assertion beyond the
+  source" (`no_overreach`).
 - One claim per packet; no batch approval.
 
 ## Not implemented yet

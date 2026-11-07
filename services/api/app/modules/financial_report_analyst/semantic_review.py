@@ -20,7 +20,7 @@ import time
 
 PACKET_VERSION = "frp-semantic-review-packet-v1"
 REVIEW_VERSION = "frp-semantic-review-v1"
-REVIEW_TTL_SECONDS = 900
+REVIEW_TTL_SECONDS = int(os.environ.get("FRP_SEMANTIC_REVIEW_TTL", "900"))
 
 CHECKLIST_KEYS = (
     "metric_identity",
@@ -36,7 +36,7 @@ CHECKLIST_LABELS = {
     "entity": "主体一致",
     "basis": "口径/合并范围一致",
     "evidence_support": "原文确实支持该表述",
-    "no_overreach": "没有因果/前瞻/比较越界",
+    "no_overreach": "是否没有增加原文之外的断言？",
 }
 VERDICTS = ("ADMIT", "REJECT", "UNCERTAIN")
 DEFAULT_REVIEWER = "local-reviewer"
