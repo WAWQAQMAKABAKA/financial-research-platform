@@ -423,3 +423,12 @@ def test_a_tampered_packet_is_refused(monkeypatch, tmp_path):
     tampered["packet_id"] = packet["packet_id"][:-4] + "0000"
     response = decide(tampered)
     assert response.status_code == 422
+
+
+def test_checklist_notes_are_recorded(monkeypatch, tmp_path):
+    packet = management_packet(monkeypatch, tmp_path)
+    notes = {key: f"note-{key}" for key in CHECKLIST_KEYS}
+
+    response = decide(packet, checklist_notes=notes)
+    assert response.status_code == 200
+    assert response.json()["review"]["checklist_notes"] == notes

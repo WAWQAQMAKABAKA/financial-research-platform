@@ -712,6 +712,7 @@ class SemanticReviewDecisionRequest(BaseModel):
     reviewer_id: str = Field(min_length=2, max_length=120)
     verdict: Literal["ADMIT", "REJECT", "UNCERTAIN"]
     checklist: dict[str, bool]
+    checklist_notes: dict[str, str] | None = None
     rationale: str = Field(min_length=8, max_length=2000)
 
 
@@ -945,6 +946,7 @@ def decide_semantic_review(
             checklist=request.checklist,
             rationale=request.rationale,
             allowlist=allowlist,
+            checklist_notes=request.checklist_notes,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None

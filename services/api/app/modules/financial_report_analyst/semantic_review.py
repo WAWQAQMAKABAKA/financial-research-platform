@@ -166,6 +166,7 @@ def validate_review(
     checklist: dict,
     rationale: str,
     allowlist: tuple[str, ...],
+    checklist_notes: dict | None = None,
 ) -> dict:
     if not isinstance(reviewer_id, str) or reviewer_id.strip() not in allowlist:
         raise ValueError("REVIEWER_NOT_ALLOWLISTED")
@@ -179,11 +180,21 @@ def validate_review(
         raise ValueError("REVIEW_CHECKLIST_NOT_MET")
     if not isinstance(rationale, str) or not (8 <= len(rationale.strip()) <= MAX_RATIONALE_CHARS):
         raise ValueError("REVIEW_RATIONALE_INVALID")
+    notes: dict[str, str] = {}
+    if checklist_notes is not None:
+        if (not isinstance(checklist_notes, dict)
+                or not set(checklist_notes) <= set(CHECKLIST_KEYS)):
+            raise ValueError("REVIEW_CHECKLIST_NOTES_INVALID")
+        for key, note in checklist_notes.items():
+            if not isinstance(note, str) or not (1 <= len(note.strip()) <= 500):
+                raise ValueError("REVIEW_CHECKLIST_NOTES_INVALID")
+            notes[key] = note.strip()
     return {
         "review_version": REVIEW_VERSION,
         "reviewer_id": reviewer_id.strip(),
         "verdict": verdict,
         "checklist": {key: checklist[key] for key in CHECKLIST_KEYS},
+        "checklist_notes": notes,
         "rationale": rationale.strip(),
         "development_only": True,
         "independent_validation": False,
