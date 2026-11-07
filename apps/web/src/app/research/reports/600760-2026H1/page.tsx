@@ -489,7 +489,7 @@ function Trace({ retrieval, selection, allowExcerpt = true }: {
   );
 }
 
-function ReviewPacketCard({ packet }: { packet: ReviewPacket }) {
+function ReviewPacketCard({ packet, question }: { packet: ReviewPacket; question: string }) {
   return (
     <section className={styles.reviewCard} aria-label="语义审阅包">
       <p className={styles.kicker}>语义审阅包 / AWAITING DECISION</p>
@@ -515,6 +515,46 @@ function ReviewPacketCard({ packet }: { packet: ReviewPacket }) {
       <p className={styles.muted}>
         允许的审阅人：{packet.allowed_reviewers.join("、")}。请显式选择 ADMIT / REJECT / UNCERTAIN。
       </p>
+
+      <form className={styles.reviewForm} action="/api/review" method="post">
+        <input type="hidden" name="packet_id" value={packet.packet_id} />
+        <input type="hidden" name="question" value={question} />
+        <input
+          type="hidden"
+          name="reviewer_id"
+          value={packet.allowed_reviewers[0] ?? "local-reviewer"}
+        />
+        {packet.checklist.map((item) => (
+          <div key={item.key} className={styles.reviewCheck}>
+            <label>
+              <input type="checkbox" name={`check_${item.key}`} />
+              {" "}{item.label}
+            </label>
+            <input
+              type="text"
+              name={`note_${item.key}`}
+              placeholder="逐项说明（可选）"
+              maxLength={500}
+            />
+          </div>
+        ))}
+        <label>
+          结论
+          <select name="verdict" defaultValue="ADMIT">
+            <option value="ADMIT">ADMIT</option>
+            <option value="REJECT">REJECT</option>
+            <option value="UNCERTAIN">UNCERTAIN</option>
+          </select>
+        </label>
+        <textarea
+          name="rationale"
+          required
+          minLength={8}
+          maxLength={2000}
+          placeholder="请写明理由（会原样写入审阅记录）"
+        />
+        <button type="submit">提交审阅决定</button>
+      </form>
     </section>
   );
 }
@@ -663,7 +703,10 @@ async function ReportBody({ searchParams }: {
               </p>
             )}
             {withheld.review_packet && (
-              <ReviewPacketCard packet={withheld.review_packet} />
+              <ReviewPacketCard
+                packet={withheld.review_packet}
+                question={withheld.request?.question ?? ""}
+              />
             )}
             {withheld.management_preview && (
               <div className={styles.managementPreview}>
@@ -743,7 +786,10 @@ async function ReportBody({ searchParams }: {
           ) : null}
 
           {report.review_packet && (
-            <ReviewPacketCard packet={report.review_packet} />
+            <ReviewPacketCard
+              packet={report.review_packet}
+              question={report.request.question}
+            />
           )}
 
           {report.coverage && (

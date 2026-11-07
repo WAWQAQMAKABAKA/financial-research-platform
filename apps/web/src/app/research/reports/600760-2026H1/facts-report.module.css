@@ -95,3 +95,11 @@
 .managementPreview{margin-top:14px;border-top:1px solid #eef3f4;padding-top:12px}
 
 .reviewContext{max-height:320px;overflow:auto;white-space:pre-wrap;font-size:12px;line-height:1.6;background:#f7fafb;border:1px solid #eef3f4;border-radius:8px;padding:10px}
+
+.reviewForm{display:flex;flex-direction:column;gap:10px;margin-top:14px;border-top:1px solid #eef3f4;padding-top:12px}
+.reviewCheck{display:flex;flex-direction:column;gap:4px}
+.reviewCheck label{font-size:13px;font-weight:600}
+.reviewCheck input[type="text"]{border:1px solid #d7e3e5;border-radius:6px;padding:6px 8px;font-size:12px}
+.reviewForm select,.reviewForm textarea{border:1px solid #d7e3e5;border-radius:6px;padding:8px;font-size:13px;font-family:inherit}
+.reviewForm textarea{min-height:72px}
+.reviewForm button{align-self:flex-start;background:#295b62;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer}
